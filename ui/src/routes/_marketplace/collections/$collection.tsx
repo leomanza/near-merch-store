@@ -65,8 +65,8 @@ function CollectionDetailPage() {
     setSizeModalProduct(product);
   };
 
-  const handleAddToCartFromModal = (productId: string, size: string) => {
-    addToCart(productId, size);
+  const handleAddToCartFromModal = (productId: string, variantId: string | undefined, size: string) => {
+    addToCart(productId, variantId, size);
     setSizeModalProduct(null);
     setIsCartSidebarOpen(true);
   };

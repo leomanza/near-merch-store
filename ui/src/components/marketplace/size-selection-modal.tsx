@@ -12,7 +12,7 @@ interface SizeSelectionModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
-  onAddToCart: (productId: string, size: string) => void;
+  onAddToCart: (productId: string, variantId: string | undefined, size: string) => void;
 }
 
 export function SizeSelectionModal({
@@ -35,7 +35,19 @@ export function SizeSelectionModal({
   if (!product) return null;
 
   const handleAddToCart = () => {
-    onAddToCart(product.id, needsSize ? selectedSize : "N/A");
+    let selectedVariantId: string | undefined;
+    
+    if (needsSize && selectedSize !== "N/A") {
+      const variant = product.variants?.find((v) => {
+        const sizeAttr = v.attributes?.find((attr) => attr.name.toLowerCase() === "size");
+        return sizeAttr?.value === selectedSize;
+      });
+      selectedVariantId = variant?.id;
+    } else if (product.variants?.length > 0) {
+      selectedVariantId = product.variants[0].id;
+    }
+    
+    onAddToCart(product.id, selectedVariantId, needsSize ? selectedSize : "N/A");
     onClose();
   };
 

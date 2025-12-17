@@ -171,6 +171,7 @@ export class PrintfulService {
               zip: params.recipient.zip,
             },
             order_items: params.items.map(item => ({
+              source: 'catalog',
               catalog_variant_id: item.variantId,
               quantity: item.quantity,
             })),
@@ -184,8 +185,8 @@ export class PrintfulService {
         }
 
         const data = await response.json() as { data: Array<{
-          id: string;
-          name: string;
+          shipping: string;
+          shipping_method_name: string;
           rate: string;
           currency: string;
           min_delivery_days?: number;
@@ -194,10 +195,12 @@ export class PrintfulService {
           max_delivery_date?: string;
         }> };
 
-        return {
+        console.log('[Printful Shipping Rates] Raw API Response:', JSON.stringify(data, null, 2));
+
+        const transformedResult = {
           rates: (data.data || []).map(rate => ({
-            id: rate.id,
-            name: rate.name,
+            id: rate.shipping,
+            name: rate.shipping_method_name,
             rate: parseFloat(rate.rate),
             currency: rate.currency,
             minDeliveryDays: rate.min_delivery_days,
@@ -207,6 +210,10 @@ export class PrintfulService {
           })),
           currency: params.currency || 'USD',
         };
+
+        console.log('[Printful Shipping Rates] Transformed Output:', JSON.stringify(transformedResult, null, 2));
+
+        return transformedResult;
       },
       catch: (e) => new Error(`Failed to calculate shipping rates: ${e instanceof Error ? e.message : String(e)}`),
     });

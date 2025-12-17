@@ -2,13 +2,14 @@ import { useCart } from '@/hooks/use-cart';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ProductCard } from '@/components/marketplace/product-card';
 import { ChevronLeft, CreditCard } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/utils/orpc';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NearMark } from '@/components/near-mark';
+import { useGetShippingQuote, type QuoteOutput } from '@/integrations/marketplace-api/checkout';
 
 export const Route = createFileRoute("/_marketplace/checkout")({
   component: CheckoutPage,
@@ -18,22 +19,70 @@ function CheckoutPage() {
   const { cartItems, subtotal } = useCart();
   const [discountCode, setDiscountCode] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [shippingQuote, setShippingQuote] = useState<QuoteOutput | null>(null);
   const navigate = useNavigate();
+  const getShippingQuoteMutation = useGetShippingQuote();
 
+  const shippingCost = shippingQuote?.shippingCost || 0;
   const tax = subtotal * 0.08;
-  const total = subtotal + tax;
+  const total = subtotal + tax + shippingCost;
   const nearAmount = (total / 3.5).toFixed(2);
+
+  const hardcodedAddress = {
+    firstName: 'Placeholder',
+    lastName: 'User',
+    addressLine1: '123 Main St',
+    city: 'Los Angeles',
+    state: 'CA',
+    postCode: '90001',
+    country: 'US',
+    email: 'user@example.com',
+  };
+
+  useEffect(() => {
+    if (cartItems.length > 0 && !shippingQuote && !getShippingQuoteMutation.isPending) {
+      getShippingQuoteMutation.mutate(
+        {
+          items: cartItems.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+          shippingAddress: hardcodedAddress,
+        },
+        {
+          onSuccess: (data) => {
+            setShippingQuote(data);
+          },
+          onError: (error: Error) => {
+            toast.error('Failed to get shipping quote', {
+              description: error.message || 'Using default shipping cost',
+            });
+          },
+        }
+      );
+    }
+  }, [cartItems.length]);
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       if (cartItems.length === 0) throw new Error('Cart is empty');
+      if (!shippingQuote) throw new Error('Shipping quote not loaded');
+
+      const selectedRates: Record<string, string> = {};
+      shippingQuote.providerBreakdown.forEach((provider) => {
+        selectedRates[provider.provider] = provider.selectedShipping.rateId;
+      });
 
       const result = await apiClient.createCheckout({
         items: cartItems.map((item) => ({
           productId: item.productId,
+          variantId: item.variantId,
           quantity: item.quantity,
-          size: item.size,
         })),
+        shippingAddress: hardcodedAddress,
+        selectedRates,
+        shippingCost: shippingQuote.shippingCost,
         successUrl: `${window.location.origin}/order-confirmation`,
         cancelUrl: `${window.location.origin}/checkout`,
       });
@@ -112,7 +161,7 @@ function CheckoutPage() {
                     <div className="text-base text-right">
                       {item.size !== "N/A" && `Size: ${item.size} • `}Qty:{" "}
                       {item.quantity}
-                    </p>
+                    </div>
                   </ProductCard>
                 ))}
               </div>
@@ -127,7 +176,15 @@ function CheckoutPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#717182]">Shipping</span>
-                <span>Free</span>
+                <span>
+                  {getShippingQuoteMutation.isPending ? (
+                    'Calculating...'
+                  ) : shippingCost > 0 ? (
+                    `$${shippingCost.toFixed(2)}`
+                  ) : (
+                    'Free'
+                  )}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#717182]">Tax</span>
@@ -163,7 +220,7 @@ function CheckoutPage() {
                 <Checkbox 
                   id="terms" 
                   checked={acceptedTerms}
-                  onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                  onCheckedChange={(checked: boolean) => setAcceptedTerms(checked)}
                   className="mt-0.5"
                 />
                 <label 
@@ -214,7 +271,7 @@ function CheckoutPage() {
 
               <button
                 onClick={handlePayWithCard}
-                disabled={checkoutMutation.isPending}
+                disabled={checkoutMutation.isPending || getShippingQuoteMutation.isPending || !shippingQuote}
                 className="block w-full border border-border p-6 hover:border-neutral-950 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-start gap-3">
@@ -240,6 +297,8 @@ function CheckoutPage() {
                 <p className="text-sm text-[#717182] mt-4">
                   {checkoutMutation.isPending 
                     ? 'Please wait...'
+                    : getShippingQuoteMutation.isPending
+                    ? 'Loading shipping rates...'
                     : 'Traditional checkout with credit card'
                   }
                 </p>

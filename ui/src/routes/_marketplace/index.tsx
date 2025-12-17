@@ -60,7 +60,7 @@ function MarketplaceHome() {
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { data: featuredData, isLoading, isError } = useFeaturedProducts(12);
+  const { data: featuredData, isError } = useFeaturedProducts(12);
   // const { data: collectionsData } = useSuspenseCollections(); // HIDDEN: Collections feature
 
   const featuredProducts = featuredData?.products ?? [];
@@ -70,8 +70,8 @@ function MarketplaceHome() {
     setSizeModalProduct(product);
   };
 
-  const handleAddToCartFromModal = (productId: string, size: string) => {
-    addToCart(productId, size);
+  const handleAddToCartFromModal = (productId: string, variantId: string | undefined, size: string) => {
+    addToCart(productId, variantId, size);
     setSizeModalProduct(null);
     setIsCartSidebarOpen(true);
   };

@@ -4,6 +4,7 @@ import { productKeys, type ProductCategory } from './keys';
 import { HIDDEN_PRODUCT_IDS, PRODUCT_MERGES, getMergeTargetId } from './merges';
 
 export type Product = Awaited<ReturnType<typeof apiClient.getProduct>>['product'];
+export type ProductImage = Product['images'][number];
 
 export function useProducts(options?: {
   category?: ProductCategory;

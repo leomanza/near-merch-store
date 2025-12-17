@@ -10,11 +10,10 @@ import {
   useProducts,
   type Product,
   type ProductCategory,
-  COLLECTIONS,
 } from "@/integrations/marketplace-api";
 import { queryClient } from "@/utils/orpc";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Filter } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/_marketplace/products/")({
@@ -47,8 +46,8 @@ function ProductsIndexPage() {
     setSizeModalProduct(product);
   };
 
-  const handleAddToCartFromModal = (productId: string, size: string) => {
-    addToCart(productId, size);
+  const handleAddToCartFromModal = (productId: string, variantId: string | undefined, size: string) => {
+    addToCart(productId, variantId, size);
     setSizeModalProduct(null);
     setIsCartSidebarOpen(true);
   };
@@ -185,4 +184,3 @@ function ProductsIndexPage() {
     </div>
   );
 }
-

@@ -81,11 +81,12 @@ export const cleanupAbandonedDrafts = (
       if (cancelResult.success) {
         console.log(`[CleanupJob] Successfully cancelled draft ${draftId} at ${providerName} for order ${order.id}`);
       } else {
-        console.error(`[CleanupJob] Failed to cancel draft ${draftId} at ${providerName} for order ${order.id}:`, cancelResult.error);
+        const errorMessage = 'error' in cancelResult ? cancelResult.error : 'Unknown error';
+        console.error(`[CleanupJob] Failed to cancel draft ${draftId} at ${providerName} for order ${order.id}:`, errorMessage);
         errors.push({
           orderId: order.id,
           provider: providerName,
-          error: cancelResult.error || 'Unknown error',
+          error: errorMessage,
         });
       }
 

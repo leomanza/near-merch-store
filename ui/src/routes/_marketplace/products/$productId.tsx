@@ -100,36 +100,6 @@ function getAttributeHex(
   return (attr as unknown as { hex?: string })?.hex;
 }
 
-function getProductColor(product: { title: string; variants?: Array<{ attributes?: Array<{ name: string; value: string }> }> }): string | undefined {
-  // 1. Try to find explicit Color attribute in first variant
-  const firstVariant = product.variants?.[0];
-  if (firstVariant?.attributes) {
-    // Try to get dynamic hex from API first
-    const apiHex = getAttributeHex(firstVariant.attributes, "Color");
-    if (apiHex) return apiHex;
-
-    const colorAttr = getOptionValue(firstVariant.attributes, "Color");
-    if (colorAttr) {
-      // Try strict match first
-      if (COLOR_MAP[colorAttr]) return COLOR_MAP[colorAttr];
-      // Try partial match on attribute value
-      for (const [name, hex] of Object.entries(COLOR_MAP)) {
-        if (colorAttr.toLowerCase().includes(name.toLowerCase())) {
-          return hex;
-        }
-      }
-    }
-  }
-
-  // 2. Fallback to title matching
-  for (const [name, hex] of Object.entries(COLOR_MAP)) {
-    if (product.title.toLowerCase().includes(name.toLowerCase())) {
-      return hex;
-    }
-  }
-  return undefined;
-}
-
 function ProductDetailPage() {
   const { productId } = Route.useParams();
   const { addToCart } = useCart();
@@ -215,7 +185,7 @@ function ProductDetailPage() {
   const handleAddToCart = () => {
     const size = selectedSize || getOptionValue(selectedVariant?.attributes, "size") || "N/A";
     for (let i = 0; i < quantity; i++) {
-      addToCart(currentStyle.id, size);
+      addToCart(currentStyle.id, selectedVariantId, size);
     }
   };
 
