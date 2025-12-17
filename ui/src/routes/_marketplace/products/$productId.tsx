@@ -214,11 +214,7 @@ function ProductDetailPage() {
   const handleAddToCart = () => {
     const size = selectedSize || getOptionValue(selectedVariant?.attributes, "size") || "N/A";
     for (let i = 0; i < quantity; i++) {
-      if (selectedVariant?.id) {
-        addToCart(selectedVariant.id, size);
-      } else {
-        addToCart(currentStyle.id, size);
-      }
+      addToCart(currentStyle.id, size);
     }
   };
 
