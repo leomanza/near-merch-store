@@ -142,7 +142,7 @@ function VerticalProductLayout({
   );
 
   const isFavorite = favoriteIds.includes(product.id);
-  const displayImage = product.images?.[0]?.url || product.variants?.[0]?.fulfillmentConfig?.designFiles?.[0]?.url;
+  const displayImage = product.thumbnailImage || product.images?.[0]?.url || product.variants?.[0]?.fulfillmentConfig?.designFiles?.[0]?.url;
 
   // Text Sizes
   const titleSize = variant === "sm" ? "text-sm" : variant === "lg" ? "text-xl" : "text-lg";
@@ -236,7 +236,7 @@ function HorizontalProductLayout({
 }: ProductCardContentProps) {
   // Horizontal logic is simpler, might not need quick add overly or favorite overlay if used in Cart/Checkout usually
 
-  const displayImage = product.images?.[0]?.url || product.variants?.[0]?.fulfillmentConfig?.designFiles?.[0]?.url;
+  const displayImage = product.thumbnailImage || product.images?.[0]?.url || product.variants?.[0]?.fulfillmentConfig?.designFiles?.[0]?.url;
 
   return (
     <div className={cn(
