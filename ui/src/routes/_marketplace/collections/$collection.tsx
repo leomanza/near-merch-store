@@ -56,10 +56,6 @@ function CollectionDetailPage() {
   const [sizeModalProduct, setSizeModalProduct] = useState<Product | null>(null);
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
 
-  // useFavorites is handled by ProductCard internally now, but check if we need it here?
-  // We don't need it here anymore since ProductCard manages the favorite button state.
-  // const { favoriteIds, toggleFavorite } = useFavorites(); 
-
   const { data } = useSuspenseCollection(collectionSlug);
   const { collection, products } = data;
   // Render collection features from API (no hardcoded UI metadata).
