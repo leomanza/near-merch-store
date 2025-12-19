@@ -42,6 +42,7 @@ function CheckoutPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
   const [availableStates, setAvailableStates] = useState<IState[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
@@ -97,7 +98,7 @@ function CheckoutPage() {
         addressLine1: string;
         addressLine2?: string;
         city: string;
-        state: string;
+        state?: string;
         postCode: string;
         country: string;
         email: string;
@@ -108,12 +109,13 @@ function CheckoutPage() {
     },
     onSuccess: (data) => {
       setShippingQuote(data);
+      setShippingError(null);
       toast.success('Shipping calculated successfully');
     },
     onError: (error: Error) => {
-      toast.error('Failed to calculate shipping', {
-        description: error.message || 'Please try again',
-      });
+      setShippingError(error.message);
+      setShippingQuote(null);
+      toast.error('Failed to calculate shipping');
     },
   });
 
@@ -165,7 +167,10 @@ function CheckoutPage() {
           variantId: item.variantId,
           quantity: item.quantity,
         })),
-        shippingAddress: formData,
+        shippingAddress: {
+          ...formData,
+          state: formData.state || undefined,
+        },
       });
     } finally {
       setIsCalculatingShipping(false);
@@ -563,6 +568,17 @@ function CheckoutPage() {
                   <p className="text-sm text-green-600 mt-2 text-center">
                     ✓ Shipping calculated: ${shippingCost.toFixed(2)}
                   </p>
+                )}
+                {shippingError && (
+                  <div className="mt-3 p-4 bg-red-50 border border-red-200 rounded">
+                    <div className="flex gap-2">
+                      <span className="text-red-600 font-semibold shrink-0">⚠</span>
+                      <div 
+                        className="text-sm text-red-800"
+                        dangerouslySetInnerHTML={{ __html: shippingError }}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </form>

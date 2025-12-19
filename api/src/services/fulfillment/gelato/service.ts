@@ -16,7 +16,7 @@ interface GelatoAddress {
   addressLine1: string;
   addressLine2?: string;
   city: string;
-  state: string;
+  state?: string;
   postCode: string;
   country: string;
   email: string;
@@ -380,7 +380,7 @@ export class GelatoService {
       address1: string;
       address2?: string;
       city: string;
-      stateCode: string;
+      stateCode?: string;
       countryCode: string;
       zip: string;
       email: string;

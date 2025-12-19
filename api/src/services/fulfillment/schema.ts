@@ -63,7 +63,7 @@ export const FulfillmentAddressSchema = z.object({
   address1: z.string(),
   address2: z.string().optional(),
   city: z.string(),
-  stateCode: z.string(),
+  stateCode: z.string().optional(),
   countryCode: z.string(),
   zip: z.string(),
   phone: z.string().optional(),

@@ -111,7 +111,7 @@ export const ShippingAddressSchema = z.object({
   addressLine1: z.string().min(1),
   addressLine2: z.string().optional(),
   city: z.string().min(1),
-  state: z.string().min(1),
+  state: z.string().min(1).optional(),
   postCode: z.string().min(1),
   country: z.string().length(2),
   email: z.string().email(),

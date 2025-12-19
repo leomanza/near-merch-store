@@ -239,12 +239,18 @@ export default createPlugin({
         }),
 
       quote: builder.quote.handler(async ({ input }) => {
-        return await Effect.runPromise(
-          Effect.gen(function* () {
-            const service = yield* CheckoutService;
-            return yield* service.getQuote(input.items, input.shippingAddress);
-          }).pipe(Effect.provide(checkoutLayer))
-        );
+        try {
+          return await Effect.runPromise(
+            Effect.gen(function* () {
+              const service = yield* CheckoutService;
+              return yield* service.getQuote(input.items, input.shippingAddress);
+            }).pipe(Effect.provide(checkoutLayer))
+          );
+        } catch (error) {
+          throw new ORPCError('BAD_REQUEST', {
+            message: error instanceof Error ? error.message : 'Failed to calculate shipping',
+          });
+        }
       }),
 
       getOrders: builder.getOrders
