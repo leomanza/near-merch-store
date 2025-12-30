@@ -9,7 +9,6 @@ import { apiClient } from '@/utils/orpc';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Checkbox } from '@/components/ui/checkbox';
-import { NearMark } from '@/components/near-mark';
 import { useForm } from '@tanstack/react-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -856,7 +855,7 @@ function CheckoutPage() {
                 <div className="mt-4 space-y-6">
                   <button
                     onClick={handlePayWithPing}
-                    disabled={true} // Not available yet
+                    disabled={checkoutMutation.isPending}
                     className="block w-full border border-border p-6 hover:border-neutral-950 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-start gap-3">
@@ -878,10 +877,12 @@ function CheckoutPage() {
                           </>
                         )}
                       </div>
-                      <div>
-                        <p className="font-medium mb-1">Pingpay</p>
+                      <div className="flex-1">
+                        <p className="font-medium mb-1">
+                          {checkoutMutation.isPending ? 'Redirecting...' : 'Pingpay'}
+                        </p>
                         <p className="text-sm text-neutral-500">
-                          Pay with cryptocurrency
+                          Pay with USDC on NEAR
                         </p>
                       </div>
                     </div>
