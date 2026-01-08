@@ -92,7 +92,7 @@ describe('groupProviderProducts', () => {
     expect(grouped[0]?.variants).toHaveLength(2);
   });
 
-  it('does NOT group different designs on the same blank', () => {
+  it('groups products by catalog ID + normalized name (heuristic)', () => {
     const products: ProviderProduct[] = [
       {
         id: 1,
@@ -106,7 +106,6 @@ describe('groupProviderProducts', () => {
           retailPrice: 20, 
           currency: 'USD', 
           catalogProductId: 111,
-          designFiles: [{ placement: 'front', url: 'design-A.png' }] // Design A
         }],
       },
       {
@@ -118,16 +117,17 @@ describe('groupProviderProducts', () => {
           id: 102, 
           externalId: 'v102', 
           name: 'White', 
-          retailPrice: 20, 
+          retailPrice: 30, // Different price is OK
           currency: 'USD', 
-          catalogProductId: 111,
-          designFiles: [{ placement: 'front', url: 'design-B.png' }] // Design B
+          catalogProductId: 111, // Same catalog ID
         }],
       },
     ];
 
     const grouped = groupProviderProducts(products);
-    expect(grouped).toHaveLength(2); // Should remain separate!
+    expect(grouped).toHaveLength(1); // Should be grouped!
+    expect(grouped[0]?.name).toBe('NEAR AI Shirt');
+    expect(grouped[0]?.variants).toHaveLength(2);
   });
 
   it('preserves originalSourceId for each variant when merging', () => {

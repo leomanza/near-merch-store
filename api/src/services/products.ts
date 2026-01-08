@@ -45,19 +45,6 @@ export function groupProviderProducts(products: ProviderProduct[]): ProviderProd
   const groups = new Map<string, ProviderProduct[]>();
   const COLOR_REGEX = /\b(Black|White|Navy|Red|Green|Blue|Grey|Gray|Yellow|Pink|Purple|Orange|Brown|Dark|Light)\b/gi;
 
-  const getDesignFingerprint = (product: ProviderProduct): string => {
-    // Find the first variant with design files to represent the product's design
-    const firstWithDesign = product.variants.find(v => v.designFiles?.length);
-    if (!firstWithDesign?.designFiles) return 'no-design';
-    
-    // Sort by placement to ensure deterministic fingerprint
-    return firstWithDesign.designFiles
-      .slice()
-      .sort((a, b) => a.placement.localeCompare(b.placement))
-      .map(df => `${df.placement}:${df.url}`)
-      .join('|');
-  };
-
   for (const product of products) {
     let groupKey = "";
     
@@ -74,7 +61,7 @@ export function groupProviderProducts(products: ProviderProduct[]): ProviderProd
       // 2. Explicit group tag (Secondary)
       groupKey = `tag-${groupTag.replace('group:', '')}`;
     } else {
-      // 3. Design-Aware Heuristic (Fallback)
+      // 3. Heuristic Fallback: catalogProductId + normalized name
       const catalogProductId = product.variants[0]?.catalogProductId || 'no-catalog';
       const normalizedName = product.name
         .replace(COLOR_REGEX, '')
@@ -82,8 +69,7 @@ export function groupProviderProducts(products: ProviderProduct[]): ProviderProd
         .toLowerCase()
         .replace(/\s+/g, '-');
       
-      const designFingerprint = getDesignFingerprint(product);
-      groupKey = `heuristic-${catalogProductId}-${normalizedName}-${designFingerprint}`;
+      groupKey = `heuristic-${catalogProductId}-${normalizedName}`;
     }
 
     if (!groups.has(groupKey)) groups.set(groupKey, []);
