@@ -259,13 +259,7 @@ export const contract = oc.router({
       description: 'Handles Ping webhook events for payment processing.',
       tags: ['Webhooks'],
     })
-    .input(
-      z.object({
-        body: z.string(),
-        signature: z.string(),
-        timestamp: z.string(),
-      })
-    )
+    .input(z.unknown())
     .output(WebhookResponseSchema),
 
   sync: oc
@@ -344,6 +338,6 @@ export const contract = oc.router({
             error: z.string(),
           })),
         })
-    )
+      ),
       
 });

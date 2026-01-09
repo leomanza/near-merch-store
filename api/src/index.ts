@@ -36,6 +36,7 @@ export default createPlugin({
 
   context: z.object({
     nearAccountId: z.string().optional(),
+    reqHeaders: z.custom<Headers>().optional(),
   }),
 
   contract,
@@ -601,14 +602,16 @@ export default createPlugin({
         return { received: true };
       }),
 
-      pingWebhook: builder.pingWebhook.handler(async ({ input }) => {
+      pingWebhook: builder.pingWebhook.handler(async ({ input, context }) => {
         const pingProvider = runtime.getPaymentProvider('pingpay');
         if (!pingProvider) {
           console.error('[Ping Webhook] PingPay provider not configured');
           throw new Error('PingPay provider not configured');
         }
 
-        const { body, signature, timestamp } = input;
+        const signature = context.reqHeaders?.get('x-ping-signature') || '';
+        const timestamp = context.reqHeaders?.get('x-ping-timestamp') || '';
+        const body = JSON.stringify(input);
 
         const webhookResult = await Effect.runPromise(
           Effect.tryPromise({
