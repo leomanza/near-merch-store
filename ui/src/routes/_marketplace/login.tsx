@@ -31,7 +31,6 @@ function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [walletConnected, setWalletConnected] = useState(false);
 
-  // Check if wallet is already connected on mount
   const accountId = authClient.near.getAccountId();
 
   const handleConnectWallet = async () => {
@@ -95,38 +94,48 @@ function LoginPage() {
 
   const isWalletConnected = walletConnected || accountId;
 
+  const handleCreateWallet = () => {
+    const width = 500;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    
+    window.open(
+      'https://wallet.meteorwallet.app/connect/mainnet/login?connectionUid=8Lt_7EFCO9g84frjAdAxw&',
+      'Meteor Wallet',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+  };
+
   return (
     <div className="bg-background min-h-screen w-full flex items-center justify-center py-16 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold mb-4">Sign In</h1>
-          <p className="text-sm text-muted-foreground mb-2">
+      <div className="w-full max-w-md space-y-12">
+        <div className="text-center space-y-4">
+          <h1 className="text-3xl font-bold tracking-tight">Sign In</h1>
+          <p className="text-base text-muted-foreground">
             {!isWalletConnected 
               ? "Connect your NEAR wallet to continue"
               : "Sign the message to complete authentication"}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Don't have a NEAR wallet?{" "}
-            <a
-              href="https://wallet.near.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-foreground"
+            <button
+              onClick={handleCreateWallet}
+              className="underline hover:text-foreground cursor-pointer"
             >
               Create one here
-            </a>
+            </button>
           </p>
         </div>
 
-        <div className="space-y-3 mb-4">
+        <div className="space-y-4">
           {!isWalletConnected ? (
-            // Step 1: Connect Wallet
             <button
               onClick={handleConnectWallet}
               disabled={isConnectingWallet}
-              className="w-full bg-primary text-primary-foreground border-2 border-primary px-6 py-5 flex items-center justify-center gap-3 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-foreground text-background px-6 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="size-6 overflow-hidden flex items-center justify-center">
+              <div className="size-5 overflow-hidden flex items-center justify-center">
                 <img
                   src={nearLogo}
                   alt="NEAR"
@@ -138,19 +147,18 @@ function LoginPage() {
               </span>
             </button>
           ) : (
-            // Step 2: Sign In
             <>
-              <div className="bg-muted/50 border border-border px-4 py-3 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Connected wallet:</p>
-                <p className="text-sm font-medium">{accountId || "Wallet connected"}</p>
+              <div className="bg-muted/50 border border-border px-4 py-4">
+                <p className="text-xs text-muted-foreground mb-1">Connected wallet</p>
+                <p className="text-sm font-medium truncate">{accountId || "Wallet connected"}</p>
               </div>
               
               <button
                 onClick={handleSignIn}
                 disabled={isSigningIn}
-                className="w-full bg-primary text-primary-foreground border-2 border-primary px-6 py-5 flex items-center justify-center gap-3 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-foreground text-background px-6 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <div className="size-6 overflow-hidden flex items-center justify-center">
+                <div className="size-5 overflow-hidden flex items-center justify-center">
                   <img
                     src={nearLogo}
                     alt="NEAR"
@@ -165,9 +173,9 @@ function LoginPage() {
               <button
                 onClick={handleDisconnect}
                 disabled={isSigningIn}
-                className="w-full bg-muted text-muted-foreground border-2 border-border px-4 py-2 flex items-center justify-center gap-2 hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-muted-foreground px-4 py-2 flex items-center justify-center hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="text-xs">Disconnect & use different wallet</span>
+                <span className="text-xs underline">Use a different wallet</span>
               </button>
             </>
           )}
@@ -175,15 +183,9 @@ function LoginPage() {
 
         <div className="text-center text-xs text-muted-foreground">
           {!isWalletConnected ? (
-            <>
-              <p>Step 1: Connect your wallet</p>
-              <p className="mt-1">Step 2: Sign a message to authenticate</p>
-            </>
+            <p>Step 1 of 2</p>
           ) : (
-            <>
-              <p>Click "Sign Message" to complete authentication.</p>
-              <p className="mt-1">This is free and doesn't require any transaction.</p>
-            </>
+            <p>Step 2 of 2 · Free, no transaction required</p>
           )}
         </div>
       </div>

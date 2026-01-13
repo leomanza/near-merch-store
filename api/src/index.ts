@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { createPlugin } from 'every-plugin';
 import { Effect, Layer, Schedule } from 'every-plugin/effect';
 import { ORPCError } from 'every-plugin/orpc';
@@ -28,12 +29,15 @@ export default createPlugin({
     PRINTFUL_API_KEY: z.string().optional(),
     PRINTFUL_STORE_ID: z.string().optional(),
     PRINTFUL_WEBHOOK_SECRET: z.string().optional(),
+    PING_API_KEY: z.string().optional(),
+    PING_WEBHOOK_SECRET: z.string().optional(),
     API_DATABASE_URL: z.string().default('file:./marketplace.db'),
     API_DATABASE_AUTH_TOKEN: z.string().optional(),
   }),
 
   context: z.object({
     nearAccountId: z.string().optional(),
+    reqHeaders: z.custom<Headers>().optional(),
   }),
 
   contract,
@@ -64,14 +68,18 @@ export default createPlugin({
                 }
                 : undefined,
           },
-          config.secrets.STRIPE_SECRET_KEY && config.secrets.STRIPE_WEBHOOK_SECRET
-            ? {
-              stripe: {
+          {
+            stripe: config.secrets.STRIPE_SECRET_KEY && config.secrets.STRIPE_WEBHOOK_SECRET
+              ? {
                 secretKey: config.secrets.STRIPE_SECRET_KEY,
                 webhookSecret: config.secrets.STRIPE_WEBHOOK_SECRET,
-              },
-            }
-            : undefined
+              }
+              : undefined,
+            ping: {
+              apiKey: config.secrets.PING_API_KEY,
+              webhookSecret: config.secrets.PING_WEBHOOK_SECRET,
+            },
+          }
         )
       );
 
@@ -90,6 +98,12 @@ export default createPlugin({
 
       const orderLayer = OrderStoreLive.pipe(Layer.provide(dbLayer));
 
+      // Cache for NEAR price
+      const nearPriceCache: { price: number | null; cachedAt: number } = {
+        price: null,
+        cachedAt: 0,
+      };
+
       console.log('[Marketplace] Plugin initialized');
       console.log(`[Marketplace] Providers: ${runtime.providers.map((p) => p.name).join(', ') || 'none'}`);
       console.log(`[Marketplace] Stripe: ${stripeService ? 'configured' : 'not configured'}`);
@@ -101,6 +115,7 @@ export default createPlugin({
         checkoutLayer,
         orderLayer,
         secrets: config.secrets,
+        nearPriceCache,
       };
     }),
 
@@ -110,7 +125,7 @@ export default createPlugin({
     }),
 
   createRouter: (context, builder) => {
-    const { stripeService, runtime, appLayer, checkoutLayer, orderLayer, secrets } = context;
+    const { stripeService, runtime, appLayer, checkoutLayer, orderLayer, secrets, nearPriceCache } = context;
 
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.nearAccountId) {
@@ -205,6 +220,50 @@ export default createPlugin({
           }).pipe(Effect.provide(appLayer))
         );
       }),
+
+      getNearPrice: builder.getNearPrice.handler(async () => {
+        const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd';
+        const CACHE_TTL = 60 * 1000; // 60 seconds
+        const FALLBACK_PRICE = 3.5;
+
+        const now = Date.now();
+        if (nearPriceCache.price && now - nearPriceCache.cachedAt < CACHE_TTL) {
+          return {
+            price: nearPriceCache.price,
+            currency: 'USD' as const,
+            source: 'coingecko',
+            cachedAt: nearPriceCache.cachedAt,
+          };
+        }
+
+        try {
+          const response = await fetch(COINGECKO_URL);
+          if (!response.ok) {
+            throw new Error('Failed to fetch NEAR price');
+          }
+          const data = await response.json() as { near: { usd: number } };
+          const price = data.near.usd;
+
+          nearPriceCache.price = price;
+          nearPriceCache.cachedAt = now;
+
+          return {
+            price,
+            currency: 'USD' as const,
+            source: 'coingecko',
+            cachedAt: now,
+          };
+        } catch (error) {
+          console.error('[getNearPrice] Failed to fetch from CoinGecko:', error);
+          return {
+            price: nearPriceCache.price || FALLBACK_PRICE,
+            currency: 'USD' as const,
+            source: nearPriceCache.price ? 'coingecko' : 'fallback',
+            cachedAt: nearPriceCache.cachedAt || now,
+          };
+        }
+      }),
+
       updateProductListing: builder.updateProductListing.handler(async ({ input }) => {
         return await Effect.runPromise(
           Effect.gen(function* () {
@@ -303,6 +362,27 @@ export default createPlugin({
 
         return { order };
       }),
+
+      getAllOrders: builder.getAllOrders
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const result = await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* OrderStore;
+              return yield* store.findAll({
+                limit: input.limit,
+                offset: input.offset,
+                status: input.status,
+                search: input.search,
+              });
+            }).pipe(Effect.provide(orderLayer))
+          );
+
+          return {
+            orders: result.orders,
+            total: result.total,
+          };
+        }),
 
       stripeWebhook: builder.stripeWebhook.handler(async ({ input }) => {
         if (!stripeService) {
@@ -421,7 +501,41 @@ export default createPlugin({
         return { received: true };
       }),
 
-      printfulWebhook: builder.printfulWebhook.handler(async ({ input }) => {
+      printfulWebhook: builder.printfulWebhook.handler(async ({ input, context }) => {
+        const webhookSecret = secrets.PRINTFUL_WEBHOOK_SECRET;
+        const signature = context.reqHeaders?.get('x-pf-webhook-signature') || input.signature || '';
+
+        if (webhookSecret && signature) {
+          try {
+            const secretBuffer = Buffer.from(webhookSecret, 'hex');
+            const expected = crypto
+              .createHmac('sha256', secretBuffer)
+              .update(input.body)
+              .digest('hex');
+
+            if (signature.length !== expected.length) {
+              console.error('[Printful Webhook] Signature length mismatch');
+              throw new ORPCError('UNAUTHORIZED', { message: 'Invalid webhook signature' });
+            }
+
+            const isValid = crypto.timingSafeEqual(
+              Buffer.from(signature, 'hex'),
+              Buffer.from(expected, 'hex')
+            );
+
+            if (!isValid) {
+              console.error('[Printful Webhook] Invalid signature');
+              throw new ORPCError('UNAUTHORIZED', { message: 'Invalid webhook signature' });
+            }
+          } catch (error) {
+            if (error instanceof ORPCError) throw error;
+            console.error('[Printful Webhook] Signature verification error:', error);
+            throw new ORPCError('UNAUTHORIZED', { message: 'Webhook signature verification failed' });
+          }
+        } else if (webhookSecret) {
+          console.warn('[Printful Webhook] No signature provided, skipping verification');
+        }
+
         try {
           const payload = JSON.parse(input.body);
           const eventType = payload.type;
@@ -451,6 +565,14 @@ export default createPlugin({
           let newTracking: TrackingInfo[] | undefined = undefined;
 
           switch (eventType) {
+            case 'order_created':
+              console.log(`[Printful Webhook] Order ${externalId} created at Printful`);
+              if (order.status === 'paid' || order.status === 'paid_pending_fulfillment') {
+                newStatus = 'processing';
+              }
+              break;
+
+            case 'shipment_sent':
             case 'package_shipped':
               newStatus = 'shipped';
               if (data.shipment) {
@@ -462,17 +584,32 @@ export default createPlugin({
               }
               break;
 
+            case 'shipment_returned':
+              newStatus = 'returned';
+              console.log(`[Printful Webhook] Shipment returned for order ${externalId}`);
+              break;
+
             case 'order_put_hold':
             case 'order_put_hold_approval':
-              console.log(`[Printful Webhook] Order ${externalId} put on hold`);
+              newStatus = 'on_hold';
+              console.log(`[Printful Webhook] Order ${externalId} put on hold: ${data?.reason || 'No reason provided'}`);
+              break;
+
+            case 'order_remove_hold':
+              if (order.status === 'on_hold') {
+                newStatus = 'processing';
+              }
+              console.log(`[Printful Webhook] Order ${externalId} hold removed`);
               break;
 
             case 'order_canceled':
               newStatus = 'cancelled';
+              console.log(`[Printful Webhook] Order ${externalId} cancelled: ${data?.reason || 'No reason provided'}`);
               break;
 
             case 'order_failed':
-              console.error(`[Printful Webhook] Order ${externalId} failed`);
+              newStatus = 'failed';
+              console.error(`[Printful Webhook] Order ${externalId} failed: ${data?.reason || 'No reason provided'}`);
               break;
 
             default:
@@ -487,6 +624,7 @@ export default createPlugin({
                 yield* store.updateStatus(externalId, statusToUpdate);
               }).pipe(Effect.provide(orderLayer))
             );
+            console.log(`[Printful Webhook] Updated order ${externalId} status to: ${statusToUpdate}`);
           }
 
           if (newTracking) {
@@ -497,8 +635,10 @@ export default createPlugin({
                 yield* store.updateTracking(externalId, trackingToUpdate);
               }).pipe(Effect.provide(orderLayer))
             );
+            console.log(`[Printful Webhook] Updated tracking for order ${externalId}`);
           }
         } catch (error) {
+          if (error instanceof ORPCError) throw error;
           console.error('[Printful Webhook] Error processing webhook:', error);
         }
 
@@ -590,6 +730,155 @@ export default createPlugin({
           }
         } catch (error) {
           console.error('[Gelato Webhook] Error processing webhook:', error);
+        }
+
+        return { received: true };
+      }),
+
+      pingWebhook: builder.pingWebhook.handler(async ({ input, context }) => {
+        const pingProvider = runtime.getPaymentProvider('pingpay');
+        if (!pingProvider) {
+          console.error('[Ping Webhook] PingPay provider not configured');
+          throw new Error('PingPay provider not configured');
+        }
+
+        const signature = context.reqHeaders?.get('x-ping-signature') || '';
+        const timestamp = context.reqHeaders?.get('x-ping-timestamp') || '';
+        const body = JSON.stringify(input);
+
+        const webhookResult = await Effect.runPromise(
+          Effect.tryPromise({
+            try: async () => {
+              const result = await pingProvider.client.verifyWebhook({
+                body,
+                signature,
+                timestamp,
+              });
+              return result;
+            },
+            catch: (error) =>
+              new Error(`Webhook verification failed: ${error instanceof Error ? error.message : String(error)}`),
+          })
+        );
+
+        const eventType = webhookResult.eventType;
+        console.log(`[Ping Webhook] Received event: ${eventType}`);
+
+        const { orderId, sessionId } = webhookResult;
+
+        let order = orderId
+          ? await Effect.runPromise(
+              Effect.gen(function* () {
+                const store = yield* OrderStore;
+                return yield* store.find(orderId);
+              }).pipe(Effect.provide(orderLayer))
+            )
+          : null;
+
+        if (!order && sessionId) {
+          order = await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* OrderStore;
+              return yield* store.findByCheckoutSession(sessionId);
+            }).pipe(Effect.provide(orderLayer))
+          );
+        }
+
+        if (!order) {
+          console.log(`[Ping Webhook] Order not found for sessionId: ${sessionId}, orderId: ${orderId}`);
+          return { received: true };
+        }
+
+        const resolvedOrderId = order.id;
+        const draftOrderIds = order.draftOrderIds || {};
+
+        switch (eventType) {
+          case 'payment.success':
+          case 'checkout.session.completed': {
+            if (order.status !== 'draft_created' && order.status !== 'pending' && order.status !== 'payment_pending') {
+              console.log(`[Ping Webhook] Order ${resolvedOrderId} already processed (status: ${order.status}), skipping`);
+              return { received: true };
+            }
+
+            await Effect.runPromise(
+              Effect.gen(function* () {
+                const store = yield* OrderStore;
+                yield* store.updateStatus(resolvedOrderId, 'paid');
+              }).pipe(Effect.provide(orderLayer))
+            );
+
+            if (Object.keys(draftOrderIds).length === 0) {
+              console.log('[Ping Webhook] No draft orders to confirm');
+              return { received: true };
+            }
+
+            const confirmationResults: Record<string, { success: boolean; error?: string }> = {};
+
+            for (const [providerName, draftId] of Object.entries(draftOrderIds)) {
+              if (providerName === 'manual') {
+                confirmationResults[providerName] = { success: true };
+                continue;
+              }
+
+              const provider = runtime.getProvider(providerName);
+              if (!provider) {
+                console.error(`[Ping Webhook] Provider not found: ${providerName}`);
+                confirmationResults[providerName] = {
+                  success: false,
+                  error: 'Provider not configured',
+                };
+                continue;
+              }
+
+              const confirmEffect = Effect.tryPromise({
+                try: () => provider.client.confirmOrder({ id: draftId as string }),
+                catch: (error) =>
+                  new Error(
+                    `Failed to confirm order at ${providerName}: ${
+                      error instanceof Error ? error.message : String(error)
+                    }`
+                  ),
+              }).pipe(Effect.retry({ times: 3, schedule: Schedule.exponential('100 millis') }));
+
+              try {
+                const result = await Effect.runPromise(confirmEffect);
+                confirmationResults[providerName] = { success: true };
+                console.log(`[Ping Webhook] Confirmed draft order ${draftId} at ${providerName}: ${result.status}`);
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                confirmationResults[providerName] = { success: false, error: errorMessage };
+                console.error(`[Ping Webhook] Failed to confirm ${providerName} draft ${draftId}:`, errorMessage);
+              }
+            }
+
+            const allSuccess = Object.values(confirmationResults).every((r) => r.success);
+            const finalStatus: OrderStatus = allSuccess ? 'processing' : 'paid_pending_fulfillment';
+
+            await Effect.runPromise(
+              Effect.gen(function* () {
+                const store = yield* OrderStore;
+                yield* store.updateStatus(resolvedOrderId, finalStatus);
+              }).pipe(Effect.provide(orderLayer))
+            );
+
+            if (!allSuccess) {
+              console.error(`[Ping Webhook] Order ${resolvedOrderId} has failed confirmations:`, confirmationResults);
+            }
+            break;
+          }
+
+          case 'payment.failed':
+            console.error(`[Ping Webhook] Payment failed for order ${resolvedOrderId}`);
+            await Effect.runPromise(
+              Effect.gen(function* () {
+                const store = yield* OrderStore;
+                yield* store.updateStatus(resolvedOrderId, 'payment_failed');
+              }).pipe(Effect.provide(orderLayer))
+            );
+            break;
+
+          default:
+            console.log(`[Ping Webhook] Unhandled event type: ${eventType}`);
         }
 
         return { received: true };

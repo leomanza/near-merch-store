@@ -63,6 +63,7 @@ export const ProductVariantSchema = z.object({
 
 export const ProductSchema = z.object({
   id: z.string(),
+  slug: z.string(), // SEO-friendly slug with publicKey appended
   title: z.string(),
   handle: z.string().optional(),
   description: z.string().optional(),
@@ -127,13 +128,19 @@ export const DeliveryEstimateSchema = z.object({
 export const OrderStatusSchema = z.enum([
   'pending',
   'draft_created',
+  'payment_pending',
   'paid',
   'paid_pending_fulfillment',
+  'payment_failed',
+  'expired',
   'processing',
+  'on_hold',
   'shipped',
   'delivered',
+  'returned',
   'cancelled',
   'partially_cancelled',
+  'failed',
   'refunded'
 ]);
 
@@ -255,7 +262,9 @@ export const ProductVariantInputSchema = z.object({
 });
 
 export const ProductWithImagesSchema = z.object({
-  id: z.string(),
+  id: z.string(), // UUID v7
+  publicKey: z.string(), // nanoid (12 char) for URLs
+  slug: z.string(), // SEO-friendly slug with publicKey appended
   name: z.string(),
   description: z.string().optional(),
   price: z.number(),

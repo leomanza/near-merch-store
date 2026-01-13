@@ -17,7 +17,7 @@ import {
 } from "@/lib/product-utils";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/utils/orpc";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter, useCanGoBack } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowLeft,
@@ -68,11 +68,11 @@ export const Route = createFileRoute("/_marketplace/products/$productId")({
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md text-center space-y-4">
-          <div className="text-red-600">
+          <div className="text-destructive">
             <AlertCircle className="h-12 w-12 mx-auto mb-4" />
             <h2 className="text-xl font-semibold">Unable to Load Product</h2>
           </div>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             {error.message ||
               "Failed to load product details. Please check your connection and try again."}
           </p>
@@ -93,6 +93,8 @@ export const Route = createFileRoute("/_marketplace/products/$productId")({
 });
 
 function ProductDetailPage() {
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
   const { addToCart } = useCart();
   const { favoriteIds, toggleFavorite } = useFavorites();
 
@@ -102,11 +104,11 @@ function ProductDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md text-center space-y-4">
-          <div className="text-red-600">
+          <div className="text-destructive">
             <AlertCircle className="h-12 w-12 mx-auto mb-4" />
             <h2 className="text-xl font-semibold">Unable to Load Product</h2>
           </div>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             {loaderData.error?.message ||
               "Failed to load product details. Please check your connection and try again."}
           </p>
@@ -202,7 +204,7 @@ function ProductDetailPage() {
   const handleAddToCart = () => {
     if (!selectedVariant) return;
     for (let i = 0; i < quantity; i++) {
-      addToCart(product.id, selectedVariantId || '', selectedSize, selectedColor);
+      addToCart(product.slug, selectedVariantId || '', selectedSize, selectedColor);
     }
   };
 
@@ -223,18 +225,24 @@ function ProductDetailPage() {
       )}
 
       <div className="border-b border-border">
-        <div className="max-w-[1408px] mx-auto px-4 md:px-8 lg:px-16 py-4">
-          <Link
-            to="/"
-            className="flex items-center gap-3 hover:opacity-70 transition-opacity"
+        <div className="container-app py-4">
+          <button
+            onClick={() => {
+              if (canGoBack) {
+                router.history.back();
+              } else {
+                router.navigate({ to: "/" });
+              }
+            }}
+            className="flex items-center gap-3 hover:opacity-70 transition-opacity cursor-pointer"
           >
             <ArrowLeft className="size-4" />
-            <span className="tracking-[-0.48px]">Back to Shop</span>
-          </Link>
+            <span className="tracking-tight">Back to Shop</span>
+          </button>
         </div>
       </div>
 
-      <div className="max-w-[1408px] mx-auto px-4 md:px-8 lg:px-16 py-12">
+      <div className="container-app py-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div className="w-full space-y-4">
             <div className="relative w-full aspect-square rounded-lg overflow-hidden shadow-[0_0_40px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_0_40px_-10px_rgba(255,255,255,0.15)]">
@@ -356,7 +364,7 @@ function ProductDetailPage() {
             <span className="text-lg tracking-[-0.48px]">${displayPrice}</span>
 
             {product.description && (
-              <p className="text-[#717182] tracking-[-0.48px] leading-6">
+              <p className="text-muted-foreground tracking-tight leading-6">
                 {product.description}
               </p>
             )}
@@ -433,21 +441,21 @@ function ProductDetailPage() {
             )}
 
             <div className="space-y-3">
-              <label className="block tracking-[-0.48px]">Quantity</label>
+              <label className="block tracking-tight">Quantity</label>
               <div className="flex items-center gap-3 border border-border rounded w-fit px-1 py-1">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-2 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                  className="p-2 hover:bg-muted rounded transition-colors disabled:opacity-50"
                   disabled={quantity <= 1}
                 >
                   <Minus className="size-4" />
                 </button>
-                <span className="tracking-[-0.48px] min-w-[2ch] text-center">
+                <span className="tracking-tight min-w-[2ch] text-center">
                   {quantity}
                 </span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="p-2 hover:bg-gray-100 rounded transition-colors"
+                  className="p-2 hover:bg-muted rounded transition-colors"
                 >
                   <Plus className="size-4" />
                 </button>
@@ -467,10 +475,10 @@ function ProductDetailPage() {
         {relatedProducts.length > 0 && (
           <div className="mt-24 space-y-8">
             <div className="space-y-2">
-              <h2 className="text-xl font-medium tracking-[-0.48px]">
+              <h2 className="text-xl font-medium tracking-tight">
                 You Might Also Like
               </h2>
-              <p className="text-[#717182] tracking-[-0.48px]">
+              <p className="text-muted-foreground tracking-tight">
                 Explore more from our collection
               </p>
             </div>

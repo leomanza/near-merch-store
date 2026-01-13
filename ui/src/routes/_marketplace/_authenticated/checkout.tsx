@@ -1,6 +1,7 @@
 import { useCart } from '@/hooks/use-cart';
+import { useNearPrice } from '@/hooks/use-near-price';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, CreditCard, Check, ChevronsUpDown } from 'lucide-react';
+import { ChevronLeft, Check, ChevronsUpDown } from 'lucide-react';
 import pingpayLogoDark from '@/assets/pingpay/pingpay-logo-dark.png';
 import pingpayLogoLight from '@/assets/pingpay/pingpay-logo-light.png';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -39,6 +40,7 @@ type ShippingAddress = Parameters<typeof apiClient.quote>[0]['shippingAddress'];
 
 function CheckoutPage() {
   const { cartItems, subtotal } = useCart();
+  const { nearPrice, isLoading: isLoadingNearPrice } = useNearPrice();
   const [discountCode, setDiscountCode] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null);
@@ -68,10 +70,10 @@ function CheckoutPage() {
     }
   };
 
-  const shippingCost = shippingQuote?.shippingCost || 0;
-  const tax = shippingQuote?.tax ?? subtotal * 0.08;
-  const total = shippingQuote?.total ?? subtotal + tax + shippingCost;
-  const nearAmount = (total / 3.5).toFixed(2);
+  const shippingCost = shippingQuote?.shippingCost ?? 0;
+  const tax = shippingQuote?.tax ?? 0;
+  const total = shippingQuote?.total ?? subtotal;
+  const nearAmount = (total / nearPrice).toFixed(2);
 
   const form = useForm({
     defaultValues: {
@@ -180,45 +182,6 @@ function CheckoutPage() {
     }
   };
 
-  const handlePayWithCard = async () => {
-    const { data: session } = await authClient.getSession();
-    if (!session?.user) {
-      navigate({
-        to: "/login",
-        search: {
-          redirect: "/checkout",
-        },
-      });
-      return;
-    }
-
-    const formData = form.state.values;
-
-    if (!formData.firstName || !formData.lastName ||
-      !formData.email || !formData.country ||
-      !formData.addressLine1 || !formData.city || !formData.postCode) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    if (availableStates.length > 0 && !formData.state) {
-      toast.error('State/Province is required for the selected country');
-      return;
-    }
-
-    if (formData.country === 'BR' && !formData.taxId) {
-      toast.error('Tax ID (CPF/CNPJ) is required for orders to Brazil');
-      return;
-    }
-
-    if (!shippingQuote) {
-      await handleCalculateShipping(formData);
-      return;
-    }
-
-    checkoutMutation.mutate({ formData, paymentProvider: 'stripe' });
-  };
-
   const handlePayWithPing = async () => {
     const { data: session } = await authClient.getSession();
     if (!session?.user) {
@@ -260,8 +223,8 @@ function CheckoutPage() {
 
   return (
     <div className="bg-background min-h-screen">
-      <div className="border-b border-[rgba(0,0,0,0.1)]">
-        <div className="max-w-[1408px] mx-auto px-4 md:px-8 lg:px-16 py-4">
+      <div className="border-b border-border">
+        <div className="container-app py-4">
           <Link
             to="/cart"
             className="flex items-center gap-3 hover:opacity-70 transition-opacity"
@@ -271,8 +234,8 @@ function CheckoutPage() {
           </Link>
         </div>
       </div>
-      <div className="max-w-[1408px] mx-auto px-4 md:px-8 lg:px-16 py-8">
-        <h1 className="text-2xl font-medium mb-16 tracking-[-0.48px]">
+      <div className="container-app py-8">
+        <h1 className="text-2xl font-medium mb-16 tracking-tight">
           Shipping Address
         </h1>
 
@@ -738,14 +701,14 @@ function CheckoutPage() {
           </div>
 
           <div>
-            <div className="border border-[rgba(0,0,0,0.1)] p-8 mb-6">
+            <div className="border border-border p-8 mb-6">
               <div className="mb-6">
                 <h2 className="text-base font-medium mb-6">Order Summary</h2>
 
                 <div className="space-y-4">
                   {cartItems.map((item) => (
                     <div key={item.productId} className="flex gap-4">
-                      <div className="size-20 bg-[#ececf0] border border-[rgba(0,0,0,0.1)] shrink-0 overflow-hidden">
+                      <div className="size-20 bg-muted border border-border shrink-0 overflow-hidden">
                         <img
                           src={item.product.images[0].url}
                           alt={item.product.title}
@@ -754,7 +717,7 @@ function CheckoutPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-base mb-1">{item.product.title}</p>
-                        <p className="text-sm text-[#717182]">
+                        <p className="text-sm text-muted-foreground">
                           {item.size !== "N/A" && `Size: ${item.size} • `}Qty:{" "}
                           {item.quantity}
                         </p>
@@ -767,15 +730,15 @@ function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="h-px bg-[rgba(0,0,0,0.1)] my-6" />
+              <div className="h-px bg-border my-6" />
 
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#717182]">Subtotal</span>
+                  <span className="text-muted-foreground">Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#717182]">Shipping</span>
+                  <span className="text-muted-foreground">Shipping</span>
                   <span>
                     {isCalculatingShipping ? (
                       <span className="text-muted-foreground">Calculating...</span>
@@ -788,25 +751,35 @@ function CheckoutPage() {
                 </div>
                 {shippingQuote?.estimatedDelivery && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#717182]">Estimated Delivery</span>
+                    <span className="text-muted-foreground">Estimated Delivery</span>
                     <span className="text-xs">
                       {shippingQuote.estimatedDelivery.minDays}-{shippingQuote.estimatedDelivery.maxDays} business days
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#717182]">Tax</span>
-                  <span>${tax.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Tax</span>
+                  <span>
+                    {isCalculatingShipping ? (
+                      <span className="text-muted-foreground">Calculating...</span>
+                    ) : shippingQuote ? (
+                      `$${tax.toFixed(2)}`
+                    ) : (
+                      <span className="text-muted-foreground">Calculated with quote</span>
+                    )}
+                  </span>
                 </div>
               </div>
 
-              <div className="h-px bg-[rgba(0,0,0,0.1)] mb-3" />
+              <div className="h-px bg-border mb-3" />
 
               <div className="flex justify-between items-start">
                 <span className="text-base font-medium">Total</span>
                 <div className="text-right">
                   <p className="text-base font-medium">${total.toFixed(2)}</p>
-                  <p className="text-sm text-[#717182]">{nearAmount} NEAR</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isLoadingNearPrice ? '...' : `≈ ${nearAmount} NEAR`}
+                  </p>
                 </div>
               </div>
 
@@ -885,39 +858,6 @@ function CheckoutPage() {
                         </p>
                       </div>
                     </div>
-                  </button>
-
-                  <button
-                    onClick={handlePayWithCard}
-                    disabled={checkoutMutation.isPending}
-                    className="block w-full border border-border p-6 hover:border-neutral-950 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="size-10 bg-[#d6d3ff] flex items-center justify-center shrink-0">
-                        {checkoutMutation.isPending ? (
-                          <div className="animate-spin size-5 border-2 border-[#635BFF]/30 border-t-[#635BFF] rounded-full" />
-                        ) : (
-                          <CreditCard className="size-6 text-[#635BFF]" />
-                        )}
-                      </div>
-
-                      <div className="flex-1">
-                        <p className="text-base mb-1">
-                          {checkoutMutation.isPending ? 'Redirecting...' : 'Pay with Card'}
-                        </p>
-                        <div className="flex items-center gap-1 text-xs text-[#635bff]">
-                          <span>Powered by</span>
-                          <span className="font-semibold">stripe</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-[#717182] mt-4">
-                      {checkoutMutation.isPending
-                        ? 'Please wait...'
-                        : 'Traditional checkout with credit card'
-                      }
-                    </p>
                   </button>
                 </div>
               </>

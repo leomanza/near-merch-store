@@ -102,7 +102,7 @@ export function SizeSelectionModal({
       return;
     }
 
-    onAddToCart(product.id, selectedVariantId, finalSize, finalColor);
+    onAddToCart(product.slug, selectedVariantId, finalSize, finalColor);
     onClose();
   };
 

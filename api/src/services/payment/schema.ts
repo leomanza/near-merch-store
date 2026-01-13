@@ -27,12 +27,14 @@ export const CheckoutSessionOutputSchema = z.object({
 export const WebhookInputSchema = z.object({
   body: z.string(),
   signature: z.string(),
+  timestamp: z.string().optional(),
 });
 
 export const WebhookOutputSchema = z.object({
   received: z.boolean(),
   eventType: z.string().optional(),
   orderId: z.string().optional(),
+  sessionId: z.string().optional(),
 });
 
 export const GetSessionInputSchema = z.object({

@@ -4,6 +4,7 @@ import {
   CollectionSchema,
   CreateCheckoutInputSchema,
   CreateCheckoutOutputSchema,
+  OrderStatusSchema,
   OrderWithItemsSchema,
   ProductCategorySchema,
   ProductSchema,
@@ -203,6 +204,29 @@ export const contract = oc.router({
     .input(z.object({ sessionId: z.string() }))
     .output(z.object({ order: OrderWithItemsSchema.nullable() })),
 
+  getAllOrders: oc
+    .route({
+      method: 'GET',
+      path: '/admin/orders',
+      summary: 'List all orders (Admin)',
+      description: 'Returns a list of all orders. Requires admin authentication.',
+      tags: ['Admin'],
+    })
+    .input(
+      z.object({
+        limit: z.number().int().positive().max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+        status: OrderStatusSchema.optional(),
+        search: z.string().optional(),
+      })
+    )
+    .output(
+      z.object({
+        orders: z.array(OrderWithItemsSchema),
+        total: z.number(),
+      })
+    ),
+
   stripeWebhook: oc
     .route({
       method: 'POST',
@@ -249,6 +273,17 @@ export const contract = oc.router({
         signature: z.string().optional(),
       })
     )
+    .output(WebhookResponseSchema),
+
+  pingWebhook: oc
+    .route({
+      method: 'POST',
+      path: '/webhooks/ping',
+      summary: 'Ping webhook',
+      description: 'Handles Ping webhook events for payment processing.',
+      tags: ['Webhooks'],
+    })
+    .input(z.unknown())
     .output(WebhookResponseSchema),
 
   sync: oc
@@ -327,6 +362,22 @@ export const contract = oc.router({
             error: z.string(),
           })),
         })
-    )
-      
+      ),
+
+  getNearPrice: oc
+    .route({
+      method: 'GET',
+      path: '/near-price',
+      summary: 'Get current NEAR price',
+      description: 'Returns the current NEAR token price in USD from CoinGecko.',
+      tags: ['Pricing'],
+    })
+    .output(
+      z.object({
+        price: z.number(),
+        currency: z.literal('USD'),
+        source: z.string(),
+        cachedAt: z.number(),
+      })
+    ),
 });

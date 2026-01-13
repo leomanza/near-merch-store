@@ -3,6 +3,7 @@ import type { FulfillmentProvider, MarketplaceRuntime } from '../runtime';
 import type { Collection, FulfillmentConfig, Product, ProductCategory, ProductImage, ProductOption } from '../schema';
 import { ProductStore, type ProductVariantInput, type ProductWithImages } from '../store';
 import type { ProviderProduct } from './fulfillment/schema';
+import { generateProductId, generatePublicKey, generateSlug } from '../utils/product-ids';
 
 export class ProductService extends Context.Tag('ProductService')<
   ProductService,
@@ -221,8 +222,15 @@ function transformProviderProduct(
     };
   });
 
+  // Generate new IDs: UUID v7 for primary key, nanoid for public URL key
+  const id = generateProductId();
+  const publicKey = generatePublicKey();
+  const slug = generateSlug(product.name, publicKey);
+
   return {
-    id: `${providerName}-product-${product.sourceId}`,
+    id,
+    publicKey,
+    slug,
     name: product.name,
     description: product.description || undefined,
     price: basePrice,
@@ -328,11 +336,12 @@ export const ProductServiceLive = (runtime: MarketplaceRuntime) =>
             return yield* store.findMany({ category, limit, offset, includeUnlisted });
           }),
 
-        getProduct: (id) =>
+        getProduct: (identifier) =>
           Effect.gen(function* () {
-            const product = yield* store.find(id);
+            const product = yield* store.find(identifier);
+
             if (!product) {
-              return yield* Effect.fail(new Error(`Product not found: ${id}`));
+              return yield* Effect.fail(new Error(`Product not found: ${identifier}`));
             }
             return { product };
           }),

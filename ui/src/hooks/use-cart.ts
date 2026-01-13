@@ -36,12 +36,11 @@ export function useCart() {
 
   const { data: products, isLoading } = useProductsByIds(productIds);
 
-  // Memoize cart items with product data
   const cartItems: CartItemWithProduct[] = useMemo(() => {
     const result: CartItemWithProduct[] = [];
 
     Object.values(items).forEach((item) => {
-      const product = products.find((p) => p.id === item.productId);
+      const product = products.find((p) => p.slug === item.productId);
       if (product) {
         result.push({ ...item, product });
       }

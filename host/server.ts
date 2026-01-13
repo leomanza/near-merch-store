@@ -5,7 +5,7 @@ import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { OpenAPIReferencePlugin } from '@orpc/openapi/plugins';
 import { onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
-import { BatchHandlerPlugin } from '@orpc/server/plugins';
+import { BatchHandlerPlugin, RequestHeadersPlugin } from '@orpc/server/plugins';
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import { createRsbuild, logger } from '@rsbuild/core';
 import 'dotenv/config';
@@ -182,6 +182,7 @@ function setupApiRoutes(
 
   const apiHandler = new OpenAPIHandler(router, {
     plugins: [
+      new RequestHeadersPlugin(),
       new OpenAPIReferencePlugin({
         schemaConverters: [new ZodToJsonSchemaConverter()],
         specGenerateOptions: {
