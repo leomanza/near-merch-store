@@ -43,65 +43,56 @@ export class ProductService extends Context.Tag('ProductService')<
 >() { }
 
 export function groupProviderProducts(products: ProviderProduct[]): ProviderProduct[] {
-  const groups = new Map<string, ProviderProduct[]>();
+  const groups = new Map<string, string>(); // product.id -> groupKey
   const COLOR_REGEX = /\b(Black|White|Navy|Red|Green|Blue|Grey|Gray|Yellow|Pink|Purple|Orange|Brown|Dark|Light)\b/gi;
 
   for (const product of products) {
     let groupKey = "";
     
     // 1. Explicit externalId (Primary)
-    // If externalId is a number string (Printful default), we ignore it as a group ID
+    // Non-numeric externalId is treated as an intentional group identifier
     const explicitId = product.externalId;
     const isNumericId = explicitId && /^\d+$/.test(explicitId);
     
+    // 2. Explicit group tag (Secondary)
     const groupTag = product.tags?.find(t => t.startsWith('group:'));
 
     if (explicitId && !isNumericId) {
       groupKey = `explicit-${explicitId}`;
     } else if (groupTag) {
-      // 2. Explicit group tag (Secondary)
       groupKey = `tag-${groupTag.replace('group:', '')}`;
-    } else {
-      // 3. Heuristic Fallback: catalogProductId + normalized name
+    }
+    /* 
+    // Heuristic Fallback disabled
+    else {
       const catalogProductId = product.variants[0]?.catalogProductId || 'no-catalog';
       const normalizedName = product.name
         .replace(COLOR_REGEX, '')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '-');
-      
       groupKey = `heuristic-${catalogProductId}-${normalizedName}`;
     }
+    */
 
-    if (!groups.has(groupKey)) groups.set(groupKey, []);
-    groups.get(groupKey)!.push(product);
+    if (groupKey) {
+      groups.set(String(product.id), groupKey);
+    }
   }
 
-  return Array.from(groups.values()).map(group => {
-    const base = group[0]!;
+  // Return products, tagging with groupId and normalizing names only for grouped items
+  return products.map(product => {
+    const groupKey = groups.get(String(product.id));
+    if (!groupKey) return product;
 
-    if (group.length === 1 && !base.externalId && !base.tags?.some(t => t.startsWith('group:'))) {
-      return base;
-    }
-
-    const groupKey = Array.from(groups.entries()).find(([_, g]) => g === group)?.[0] || base.id;
-
-    // Preserve originalSourceId on each variant before merging
-    const mergedVariants = group.flatMap(p => 
-      p.variants.map(v => ({
-        ...v,
-        originalSourceId: v.originalSourceId || p.sourceId, // Keep original Printful product ID
-      }))
-    );
+    const finalGroupId = groupKey.startsWith('explicit-') ? groupKey.replace('explicit-', '') : groupKey;
 
     return {
-      ...base,
-      id: `group-${groupKey}`,
-      sourceId: `group-${groupKey}`,
-      // Use normalized name for the unified product (remove colors and collapse spaces)
-      name: base.name.replace(COLOR_REGEX, '').replace(/\s+/g, ' ').trim(),
-      variants: mergedVariants,
-    } as ProviderProduct;
+      ...product,
+      groupId: finalGroupId,
+      // Normalize the name (e.g. "Black Hat" -> "Hat") for products that are part of a group
+      name: product.name.replace(COLOR_REGEX, '').replace(/\s+/g, ' ').trim(),
+    };
   });
 }
 
@@ -187,14 +178,14 @@ function transformProviderProduct(
   const variants: ProductVariantInput[] = product.variants.map((variant) => {
     const variantId = String(variant.id);
 
-    // Use originalSourceId if set (for merged products), otherwise use the product's sourceId
-    const originalProductId = variant.originalSourceId 
+    // For grouped products, we maintain the original product reference for fulfillment
+    const externalProductId = variant.originalSourceId 
       ? String(variant.originalSourceId) 
       : String(product.sourceId);
 
     const fulfillmentConfig: FulfillmentConfig = {
       externalVariantId: variantId,
-      externalProductId: originalProductId,
+      externalProductId: externalProductId,
       designFiles: variant.designFiles,
       providerData: providerName === 'printful'
         ? {
@@ -245,6 +236,7 @@ function transformProviderProduct(
     externalProductId: String(product.sourceId),
     source: providerName,
     tags: product.tags || [],
+    groupId: product.groupId,
   };
 }
 
@@ -283,9 +275,11 @@ export const ProductServiceLive = (runtime: MarketplaceRuntime) =>
         Effect.gen(function* () {
           console.log(`[ProductSync] Starting sync from ${provider.name}...`);
 
+          console.log(`[ProductSync] Fetching products from ${provider.name}...`);
           const { products } = yield* Effect.tryPromise({
             try: () => provider.client.getProducts({ limit: 100, offset: 0 }),
             catch: (e) => {
+              console.error(`[ProductSync] Failed to fetch from ${provider.name}:`, e);
               const issues = extractValidationIssues(e);
               if (issues) {
                 console.error(`[ProductSync] Validation error from ${provider.name}:`);
@@ -307,16 +301,14 @@ export const ProductServiceLive = (runtime: MarketplaceRuntime) =>
 
           for (const product of groupedProducts) {
             try {
+              console.log(`[ProductSync] Upserting product ${product.id} (${product.name})`);
               const localProduct = transformProviderProduct(provider.name, product);
-              yield* store.upsert(localProduct);
-
-
-
               yield* store.upsert(localProduct);
               syncedCount++;
               console.log(`[ProductSync] Synced product: ${localProduct.name} with ${localProduct.variants.length} variants`);
             } catch (error) {
               console.error(`[ProductSync] Failed to sync product ${product.id}:`, error);
+              throw error; // Propagate error to trigger the catch block in sync()
             }
           }
 
@@ -390,6 +382,7 @@ export const ProductServiceLive = (runtime: MarketplaceRuntime) =>
               return { status: 'completed', count: totalSynced, removed: totalRemoved };
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error(`[ProductSync] Sync failed with error: ${errorMessage}`, error);
               yield* store.setSyncStatus('products', 'error', null, new Date(), errorMessage);
               return yield* Effect.fail(new Error(`Sync failed: ${errorMessage}`));
             }

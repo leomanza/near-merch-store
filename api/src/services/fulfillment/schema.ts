@@ -45,6 +45,7 @@ export const ProviderProductSchema = z.object({
   description: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  groupId: z.string().optional(),
   variants: z.array(ProviderVariantSchema),
 });
 
