@@ -71,6 +71,14 @@ export function MarketplaceFooter() {
               >
                 GitHub
               </a>
+              <a
+                href="https://t.me/+CvF9u2osLrYwYzFh"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block link-muted text-sm"
+              >
+                Feedback
+              </a>
             </div>
           </div>
         </div>
