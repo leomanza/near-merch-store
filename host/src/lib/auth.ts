@@ -38,7 +38,7 @@ export const auth = betterAuth({
   },
   session: {
     cookieCache: {
-      enabled: true,
+      enabled: process.env.NODE_ENV === "production",
       maxAge: 5 * 60 // 5 minutes cache - reduces DB hits
     }
   },

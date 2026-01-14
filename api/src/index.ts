@@ -11,6 +11,7 @@ import { CheckoutService, CheckoutServiceLive } from './services/checkout';
 import { ProductService, ProductServiceLive } from './services/products';
 import { StripeService } from './services/stripe';
 import { DatabaseLive, OrderStore, OrderStoreLive, ProductStoreLive } from './store';
+import { ProviderConfigStore, ProviderConfigStoreLive } from './store/providers';
 export * from './schema';
 
 export default createPlugin({
@@ -97,6 +98,7 @@ export default createPlugin({
       );
 
       const orderLayer = OrderStoreLive.pipe(Layer.provide(dbLayer));
+      const providerLayer = ProviderConfigStoreLive.pipe(Layer.provide(dbLayer));
 
       // Cache for NEAR price
       const nearPriceCache: { price: number | null; cachedAt: number } = {
@@ -114,6 +116,7 @@ export default createPlugin({
         appLayer,
         checkoutLayer,
         orderLayer,
+        providerLayer,
         secrets: config.secrets,
         nearPriceCache,
       };
@@ -125,7 +128,7 @@ export default createPlugin({
     }),
 
   createRouter: (context, builder) => {
-    const { stripeService, runtime, appLayer, checkoutLayer, orderLayer, secrets, nearPriceCache } = context;
+    const { stripeService, runtime, appLayer, checkoutLayer, orderLayer, providerLayer, secrets, nearPriceCache } = context;
 
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.nearAccountId) {
@@ -363,6 +366,49 @@ export default createPlugin({
         return { order };
       }),
 
+      subscribeOrderStatus: builder.subscribeOrderStatus.handler(async function* ({ input, signal }) {
+        const TERMINAL_STATUSES = ['shipped', 'delivered', 'cancelled', 'failed', 'returned', 'refunded', 'on_hold', 'partially_cancelled'];
+        const POLL_INTERVAL = 500;
+
+        let lastStatus: string | undefined;
+        let lastTrackingJson: string | undefined;
+
+        while (!signal?.aborted) {
+          const order = await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* OrderStore;
+              return yield* store.findByCheckoutSession(input.sessionId);
+            }).pipe(Effect.provide(orderLayer))
+          );
+
+          if (!order) {
+            await new Promise(r => setTimeout(r, POLL_INTERVAL));
+            continue;
+          }
+
+          const currentTrackingJson = JSON.stringify(order.trackingInfo || []);
+          const hasStatusChange = order.status !== lastStatus;
+          const hasTrackingChange = currentTrackingJson !== lastTrackingJson;
+
+          if (hasStatusChange || hasTrackingChange) {
+            lastStatus = order.status;
+            lastTrackingJson = currentTrackingJson;
+
+            yield {
+              status: order.status,
+              trackingInfo: order.trackingInfo,
+              updatedAt: order.updatedAt,
+            };
+
+            if (TERMINAL_STATUSES.includes(order.status)) {
+              return;
+            }
+          }
+
+          await new Promise(r => setTimeout(r, POLL_INTERVAL));
+        }
+      }),
+
       getAllOrders: builder.getAllOrders
         .use(requireAuth)
         .handler(async ({ input }) => {
@@ -502,8 +548,18 @@ export default createPlugin({
       }),
 
       printfulWebhook: builder.printfulWebhook.handler(async ({ input, context }) => {
-        const webhookSecret = secrets.PRINTFUL_WEBHOOK_SECRET;
         const signature = context.reqHeaders?.get('x-pf-webhook-signature') || input.signature || '';
+
+        let webhookSecret = secrets.PRINTFUL_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+          const dbSecret = await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* ProviderConfigStore;
+              return yield* store.getSecretKey('printful');
+            }).pipe(Effect.provide(providerLayer))
+          );
+          webhookSecret = dbSecret || undefined;
+        }
 
         if (webhookSecret && signature) {
           try {
@@ -582,6 +638,11 @@ export default createPlugin({
                   shipmentMethodName: data.shipment.service || 'Standard',
                 }];
               }
+              break;
+
+            case 'shipment_delivered':
+              newStatus = 'delivered';
+              console.log(`[Printful Webhook] Shipment delivered for order ${externalId}`);
               break;
 
             case 'shipment_returned':
@@ -891,6 +952,123 @@ export default createPlugin({
           cleanupAbandonedDrafts(runtime, maxAgeHours).pipe(Effect.provide(orderLayer))
         );
       }),
+
+      getProviderConfig: builder.getProviderConfig
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const config = await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* ProviderConfigStore;
+              return yield* store.getConfig(input.provider);
+            }).pipe(Effect.provide(providerLayer))
+          );
+
+          return { config };
+        }),
+
+      configureWebhook: builder.configureWebhook
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const printfulProvider = runtime.getProvider('printful');
+          if (!printfulProvider) {
+            throw new ORPCError('BAD_REQUEST', { message: 'Printful provider not configured' });
+          }
+
+          const { PrintfulService } = await import('./services/fulfillment/printful/service');
+          const printfulService = new PrintfulService(
+            secrets.PRINTFUL_API_KEY!,
+            secrets.PRINTFUL_STORE_ID!
+          );
+
+          const webhookUrl = input.webhookUrlOverride || '';
+          const result = await Effect.runPromise(
+            printfulService.configureWebhooks({
+              defaultUrl: webhookUrl,
+              events: input.events,
+              expiresAt: input.expiresAt,
+            })
+          );
+
+          await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* ProviderConfigStore;
+              yield* store.upsertConfig({
+                provider: input.provider,
+                enabled: true,
+                webhookUrl: result.webhookUrl,
+                webhookUrlOverride: webhookUrl,
+                enabledEvents: result.enabledEvents,
+                publicKey: result.publicKey,
+                secretKey: result.secretKey,
+                lastConfiguredAt: Date.now(),
+                expiresAt: result.expiresAt,
+              });
+            }).pipe(Effect.provide(providerLayer))
+          );
+
+          return {
+            success: true,
+            webhookUrl: result.webhookUrl,
+            enabledEvents: result.enabledEvents,
+            publicKey: result.publicKey,
+            expiresAt: result.expiresAt,
+          };
+        }),
+
+      disableWebhook: builder.disableWebhook
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const printfulProvider = runtime.getProvider('printful');
+          if (!printfulProvider) {
+            throw new ORPCError('BAD_REQUEST', { message: 'Printful provider not configured' });
+          }
+
+          const { PrintfulService } = await import('./services/fulfillment/printful/service');
+          const printfulService = new PrintfulService(
+            secrets.PRINTFUL_API_KEY!,
+            secrets.PRINTFUL_STORE_ID!
+          );
+
+          await Effect.runPromise(printfulService.disableWebhooks());
+
+          await Effect.runPromise(
+            Effect.gen(function* () {
+              const store = yield* ProviderConfigStore;
+              yield* store.clearWebhookConfig(input.provider);
+            }).pipe(Effect.provide(providerLayer))
+          );
+
+          return { success: true };
+        }),
+
+      testProvider: builder.testProvider
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const printfulProvider = runtime.getProvider('printful');
+          if (!printfulProvider) {
+            throw new ORPCError('BAD_REQUEST', { message: 'Printful provider not configured' });
+          }
+
+          const { PrintfulService } = await import('./services/fulfillment/printful/service');
+          const printfulService = new PrintfulService(
+            secrets.PRINTFUL_API_KEY!,
+            secrets.PRINTFUL_STORE_ID!
+          );
+
+          try {
+            const result = await Effect.runPromise(printfulService.ping());
+            return {
+              success: result.success,
+              timestamp: result.timestamp,
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message: error instanceof Error ? error.message : 'Connection test failed',
+              timestamp: new Date().toISOString(),
+            };
+          }
+        }),
     };
   },
 });

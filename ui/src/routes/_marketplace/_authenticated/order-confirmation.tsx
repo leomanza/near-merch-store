@@ -1,5 +1,7 @@
 import { useCart } from "@/hooks/use-cart";
-import { useOrderByCheckoutSession } from "@/integrations/api/orders";
+import { apiClient } from "@/utils/orpc";
+import type { Order } from "@/integrations/api/orders";
+import { type OrderStatus, statusLabels } from "@/lib/order-status";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CheckCircle,
@@ -11,7 +13,7 @@ import {
   Clock,
   AlertTriangle,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type SearchParams = {
@@ -31,29 +33,14 @@ export const Route = createFileRoute("/_marketplace/_authenticated/order-confirm
   component: OrderConfirmationPage,
 });
 
-const statusLabels: Record<string, string> = {
-  pending: "Pending",
-  draft_created: "Awaiting Payment",
-  payment_pending: "Payment Processing",
-  paid: "Payment Received",
-  paid_pending_fulfillment: "Processing Order",
-  processing: "Order Placed",
-  printing: "Printing",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  payment_failed: "Payment Failed",
-  expired: "Session Expired",
-};
-
 type OrderStep = 'payment' | 'processing' | 'shipped';
 
 interface StepConfig {
   label: string;
   icon: React.ReactNode;
-  activeStatuses: string[];
-  completedStatuses: string[];
-  errorStatuses: string[];
+  activeStatuses: OrderStatus[];
+  completedStatuses: OrderStatus[];
+  errorStatuses: OrderStatus[];
 }
 
 const steps: Record<OrderStep, StepConfig> = {
@@ -61,26 +48,26 @@ const steps: Record<OrderStep, StepConfig> = {
     label: 'Payment',
     icon: <CheckCircle className="size-5" />,
     activeStatuses: ['pending', 'draft_created', 'payment_pending'],
-    completedStatuses: ['paid', 'paid_pending_fulfillment', 'processing', 'printing', 'shipped', 'delivered'],
-    errorStatuses: ['payment_failed', 'expired', 'cancelled'],
+    completedStatuses: ['paid', 'paid_pending_fulfillment', 'processing', 'shipped', 'delivered', 'on_hold', 'refunded'],
+    errorStatuses: ['payment_failed', 'expired', 'cancelled', 'failed'],
   },
   processing: {
     label: 'Processing',
     icon: <Package className="size-5" />,
-    activeStatuses: ['paid', 'paid_pending_fulfillment'],
-    completedStatuses: ['processing', 'printing', 'shipped', 'delivered'],
-    errorStatuses: [],
+    activeStatuses: ['paid', 'paid_pending_fulfillment', 'on_hold'],
+    completedStatuses: ['processing', 'shipped', 'delivered'],
+    errorStatuses: ['failed', 'cancelled', 'partially_cancelled'],
   },
   shipped: {
     label: 'Shipped',
     icon: <Truck className="size-5" />,
-    activeStatuses: ['processing', 'printing'],
+    activeStatuses: ['processing'],
     completedStatuses: ['shipped', 'delivered'],
-    errorStatuses: [],
+    errorStatuses: ['returned', 'cancelled'],
   },
 };
 
-function getStepStatus(step: OrderStep, orderStatus?: string): 'pending' | 'active' | 'completed' | 'error' {
+function getStepStatus(step: OrderStep, orderStatus?: OrderStatus): 'pending' | 'active' | 'completed' | 'error' {
   if (!orderStatus) return 'pending';
   
   const config = steps[step];
@@ -92,7 +79,7 @@ function getStepStatus(step: OrderStep, orderStatus?: string): 'pending' | 'acti
   return 'pending';
 }
 
-function OrderProgressIndicator({ status }: { status?: string }) {
+function OrderProgressIndicator({ status }: { status?: OrderStatus }) {
   const stepOrder: OrderStep[] = ['payment', 'processing', 'shipped'];
   
   return (
@@ -155,83 +142,93 @@ function OrderProgressIndicator({ status }: { status?: string }) {
   );
 }
 
-function StatusMessage({ status }: { status?: string }) {
-  const messages: Record<string, { icon: React.ReactNode; title: string; description: string; color: string }> = {
-    pending: {
-      icon: <Clock className="size-12 text-gray-400" />,
-      title: "Waiting for payment...",
-      description: "Please complete your payment to proceed with your order.",
-      color: "gray",
-    },
+function StatusMessage({ status }: { status?: OrderStatus }) {
+  const defaultMessage = {
+    icon: <Clock className="size-12 text-gray-400" />,
+    title: "Waiting for payment...",
+    description: "Please complete your payment to proceed with your order.",
+  };
+
+  const messages: Partial<Record<OrderStatus, { icon: React.ReactNode; title: string; description: string }>> = {
+    pending: defaultMessage,
     draft_created: {
       icon: <Clock className="size-12 text-yellow-500 animate-pulse" />,
       title: "Waiting for payment confirmation...",
       description: "Your order is ready. Complete the payment to proceed.",
-      color: "yellow",
     },
     payment_pending: {
       icon: <Loader2 className="size-12 text-yellow-500 animate-spin" />,
       title: "Payment is being processed...",
       description: "Please wait while we confirm your payment. This may take a moment.",
-      color: "yellow",
     },
     paid: {
       icon: <CheckCircle className="size-12 text-green-500" />,
       title: "Payment confirmed!",
       description: "Your payment was successful. We're now processing your order.",
-      color: "green",
     },
     paid_pending_fulfillment: {
       icon: <Package className="size-12 text-blue-500 animate-pulse" />,
       title: "Payment confirmed!",
       description: "Your payment was successful. We're finalizing your order with our fulfillment partners.",
-      color: "blue",
     },
     processing: {
       icon: <CheckCircle className="size-12 text-green-500" />,
       title: "Order placed successfully!",
       description: "Your order has been confirmed and is being prepared for shipment.",
-      color: "green",
-    },
-    printing: {
-      icon: <Package className="size-12 text-purple-500" />,
-      title: "Your order is being printed!",
-      description: "Our fulfillment partners are creating your custom items.",
-      color: "purple",
     },
     shipped: {
       icon: <Truck className="size-12 text-blue-500" />,
       title: "Your order has shipped!",
       description: "Your package is on its way. Check below for tracking information.",
-      color: "blue",
     },
     delivered: {
       icon: <CheckCircle className="size-12 text-green-500" />,
       title: "Order delivered!",
       description: "Your order has been delivered. Enjoy your purchase!",
-      color: "green",
     },
     payment_failed: {
       icon: <XCircle className="size-12 text-red-500" />,
       title: "Payment failed",
       description: "Unfortunately, your payment could not be processed. Please try again.",
-      color: "red",
     },
     expired: {
       icon: <AlertTriangle className="size-12 text-orange-500" />,
       title: "Session expired",
       description: "Your payment session has expired. Please create a new checkout.",
-      color: "orange",
     },
     cancelled: {
       icon: <XCircle className="size-12 text-red-500" />,
       title: "Order cancelled",
       description: "This order has been cancelled.",
-      color: "red",
+    },
+    on_hold: {
+      icon: <AlertTriangle className="size-12 text-orange-500" />,
+      title: "Order on hold",
+      description: "Your order is on hold. Our team is reviewing it and will reach out if needed.",
+    },
+    returned: {
+      icon: <Package className="size-12 text-red-500" />,
+      title: "Order returned",
+      description: "Your shipment has been returned. Please contact support for assistance.",
+    },
+    failed: {
+      icon: <XCircle className="size-12 text-red-500" />,
+      title: "Order failed",
+      description: "Unfortunately, your order could not be processed. Please contact support.",
+    },
+    refunded: {
+      icon: <CheckCircle className="size-12 text-purple-500" />,
+      title: "Order refunded",
+      description: "Your order has been refunded. The amount will appear in your account shortly.",
+    },
+    partially_cancelled: {
+      icon: <AlertTriangle className="size-12 text-orange-500" />,
+      title: "Order partially cancelled",
+      description: "Some items in your order have been cancelled. Check your order details.",
     },
   };
 
-  const message = messages[status || 'pending'] || messages.pending;
+  const message = (status && messages[status]) || defaultMessage;
 
   return (
     <div className="text-center mb-8">
@@ -242,24 +239,69 @@ function StatusMessage({ status }: { status?: string }) {
   );
 }
 
-const shouldPollStatus = (status?: string) => {
-  return (
-    status && ["pending", "draft_created", "payment_pending", "paid", "paid_pending_fulfillment", "processing", "printing"].includes(status)
-  );
-};
+const TERMINAL_STATUSES: OrderStatus[] = ['shipped', 'delivered', 'cancelled', 'failed', 'returned', 'refunded', 'on_hold', 'partially_cancelled'];
 
 function OrderConfirmationPage() {
   const { session_id } = Route.useSearch();
   const { clearCart } = useCart();
 
-  const { data: orderData, isLoading, error } = useOrderByCheckoutSession(session_id, {
-    refetchInterval: (query) => {
-      const status = query.state.data?.order?.status;
-      return shouldPollStatus(status) ? 3000 : false;
-    },
-  });
+  const [order, setOrder] = useState<Order | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const order = orderData?.order;
+  useEffect(() => {
+    if (!session_id) {
+      setIsLoading(false);
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    (async () => {
+      try {
+        const initialData = await apiClient.getOrderByCheckoutSession({ sessionId: session_id });
+        if (initialData.order) {
+          setOrder(initialData.order);
+          setIsLoading(false);
+
+          if (TERMINAL_STATUSES.includes(initialData.order.status)) {
+            return;
+          }
+        }
+
+        const stream = await apiClient.subscribeOrderStatus(
+          { sessionId: session_id },
+          { signal: abortController.signal }
+        );
+
+        for await (const event of stream) {
+          setOrder((prev: Order | null) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: event.status,
+              trackingInfo: event.trackingInfo,
+              updatedAt: event.updatedAt,
+            };
+          });
+          setIsLoading(false);
+
+          if (TERMINAL_STATUSES.includes(event.status)) {
+            break;
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
+        console.error('[OrderConfirmation] Stream error:', err);
+        setError(err instanceof Error ? err : new Error('Failed to load order'));
+        setIsLoading(false);
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [session_id]);
 
   useEffect(() => {
     if (order && ['paid', 'processing', 'shipped', 'delivered'].includes(order.status)) {
@@ -278,8 +320,8 @@ function OrderConfirmationPage() {
     );
   }
 
-  const isErrorState = order?.status === 'payment_failed' || order?.status === 'expired' || order?.status === 'cancelled';
-  const isSuccessState = order?.status === 'processing' || order?.status === 'shipped' || order?.status === 'delivered';
+  const isErrorState = ['payment_failed', 'expired', 'cancelled', 'failed', 'returned'].includes(order?.status || '');
+  const isSuccessState = ['processing', 'shipped', 'delivered'].includes(order?.status || '');
 
   return (
     <div className="bg-background min-h-screen">

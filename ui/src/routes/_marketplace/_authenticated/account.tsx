@@ -77,6 +77,7 @@ function MyAccountPage() {
           <div className="space-y-1">
             <Link
               to="/account/orders"
+              preload="intent"
               className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${isOrdersActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-gray-50 dark:hover:bg-accent/50"
                 }`}
             >
@@ -87,6 +88,7 @@ function MyAccountPage() {
 
             <Link
               to="/account/connected"
+              preload="intent"
               className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${isConnectedActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-gray-50 dark:hover:bg-accent/50"
                 }`}
             >

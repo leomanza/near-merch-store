@@ -181,4 +181,12 @@ export class PrintfulClient {
     const result = await this.sdk.ordersV2.getShipments(orderId, this.storeId);
     return (result?.data ?? []) as Shipment[];
   }
+
+  get webhookV2() {
+    return this.sdk.webhookV2;
+  }
+
+  get storesV2() {
+    return this.sdk.storesV2;
+  }
 }

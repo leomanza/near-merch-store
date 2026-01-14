@@ -36,6 +36,7 @@ import { Route as MarketplaceAuthenticatedAccountConnectedRouteImport } from './
 import { Route as MarketplaceAuthenticatedAdminDashboardRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard'
 import { Route as MarketplaceAuthenticatedAdminDashboardIndexRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard/index'
 import { Route as MarketplaceAuthenticatedAdminDashboardUsersRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard/users'
+import { Route as MarketplaceAuthenticatedAdminDashboardProvidersRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard/providers'
 import { Route as MarketplaceAuthenticatedAdminDashboardOrdersRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard/orders'
 import { Route as MarketplaceAuthenticatedAdminDashboardInventoryRouteImport } from './routes/_marketplace/_authenticated/_admin/dashboard/inventory'
 
@@ -189,6 +190,12 @@ const MarketplaceAuthenticatedAdminDashboardUsersRoute =
     path: '/users',
     getParentRoute: () => MarketplaceAuthenticatedAdminDashboardRoute,
   } as any)
+const MarketplaceAuthenticatedAdminDashboardProvidersRoute =
+  MarketplaceAuthenticatedAdminDashboardProvidersRouteImport.update({
+    id: '/providers',
+    path: '/providers',
+    getParentRoute: () => MarketplaceAuthenticatedAdminDashboardRoute,
+  } as any)
 const MarketplaceAuthenticatedAdminDashboardOrdersRoute =
   MarketplaceAuthenticatedAdminDashboardOrdersRouteImport.update({
     id: '/orders',
@@ -226,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/account/': typeof MarketplaceAuthenticatedAccountIndexRoute
   '/dashboard/inventory': typeof MarketplaceAuthenticatedAdminDashboardInventoryRoute
   '/dashboard/orders': typeof MarketplaceAuthenticatedAdminDashboardOrdersRoute
+  '/dashboard/providers': typeof MarketplaceAuthenticatedAdminDashboardProvidersRoute
   '/dashboard/users': typeof MarketplaceAuthenticatedAdminDashboardUsersRoute
   '/dashboard/': typeof MarketplaceAuthenticatedAdminDashboardIndexRoute
 }
@@ -251,6 +259,7 @@ export interface FileRoutesByTo {
   '/account': typeof MarketplaceAuthenticatedAccountIndexRoute
   '/dashboard/inventory': typeof MarketplaceAuthenticatedAdminDashboardInventoryRoute
   '/dashboard/orders': typeof MarketplaceAuthenticatedAdminDashboardOrdersRoute
+  '/dashboard/providers': typeof MarketplaceAuthenticatedAdminDashboardProvidersRoute
   '/dashboard/users': typeof MarketplaceAuthenticatedAdminDashboardUsersRoute
   '/dashboard': typeof MarketplaceAuthenticatedAdminDashboardIndexRoute
 }
@@ -283,6 +292,7 @@ export interface FileRoutesById {
   '/_marketplace/_authenticated/account/': typeof MarketplaceAuthenticatedAccountIndexRoute
   '/_marketplace/_authenticated/_admin/dashboard/inventory': typeof MarketplaceAuthenticatedAdminDashboardInventoryRoute
   '/_marketplace/_authenticated/_admin/dashboard/orders': typeof MarketplaceAuthenticatedAdminDashboardOrdersRoute
+  '/_marketplace/_authenticated/_admin/dashboard/providers': typeof MarketplaceAuthenticatedAdminDashboardProvidersRoute
   '/_marketplace/_authenticated/_admin/dashboard/users': typeof MarketplaceAuthenticatedAdminDashboardUsersRoute
   '/_marketplace/_authenticated/_admin/dashboard/': typeof MarketplaceAuthenticatedAdminDashboardIndexRoute
 }
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/account/'
     | '/dashboard/inventory'
     | '/dashboard/orders'
+    | '/dashboard/providers'
     | '/dashboard/users'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/dashboard/inventory'
     | '/dashboard/orders'
+    | '/dashboard/providers'
     | '/dashboard/users'
     | '/dashboard'
   id:
@@ -368,6 +380,7 @@ export interface FileRouteTypes {
     | '/_marketplace/_authenticated/account/'
     | '/_marketplace/_authenticated/_admin/dashboard/inventory'
     | '/_marketplace/_authenticated/_admin/dashboard/orders'
+    | '/_marketplace/_authenticated/_admin/dashboard/providers'
     | '/_marketplace/_authenticated/_admin/dashboard/users'
     | '/_marketplace/_authenticated/_admin/dashboard/'
   fileRoutesById: FileRoutesById
@@ -567,6 +580,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceAuthenticatedAdminDashboardUsersRouteImport
       parentRoute: typeof MarketplaceAuthenticatedAdminDashboardRoute
     }
+    '/_marketplace/_authenticated/_admin/dashboard/providers': {
+      id: '/_marketplace/_authenticated/_admin/dashboard/providers'
+      path: '/providers'
+      fullPath: '/dashboard/providers'
+      preLoaderRoute: typeof MarketplaceAuthenticatedAdminDashboardProvidersRouteImport
+      parentRoute: typeof MarketplaceAuthenticatedAdminDashboardRoute
+    }
     '/_marketplace/_authenticated/_admin/dashboard/orders': {
       id: '/_marketplace/_authenticated/_admin/dashboard/orders'
       path: '/orders'
@@ -587,6 +607,7 @@ declare module '@tanstack/react-router' {
 interface MarketplaceAuthenticatedAdminDashboardRouteChildren {
   MarketplaceAuthenticatedAdminDashboardInventoryRoute: typeof MarketplaceAuthenticatedAdminDashboardInventoryRoute
   MarketplaceAuthenticatedAdminDashboardOrdersRoute: typeof MarketplaceAuthenticatedAdminDashboardOrdersRoute
+  MarketplaceAuthenticatedAdminDashboardProvidersRoute: typeof MarketplaceAuthenticatedAdminDashboardProvidersRoute
   MarketplaceAuthenticatedAdminDashboardUsersRoute: typeof MarketplaceAuthenticatedAdminDashboardUsersRoute
   MarketplaceAuthenticatedAdminDashboardIndexRoute: typeof MarketplaceAuthenticatedAdminDashboardIndexRoute
 }
@@ -597,6 +618,8 @@ const MarketplaceAuthenticatedAdminDashboardRouteChildren: MarketplaceAuthentica
       MarketplaceAuthenticatedAdminDashboardInventoryRoute,
     MarketplaceAuthenticatedAdminDashboardOrdersRoute:
       MarketplaceAuthenticatedAdminDashboardOrdersRoute,
+    MarketplaceAuthenticatedAdminDashboardProvidersRoute:
+      MarketplaceAuthenticatedAdminDashboardProvidersRoute,
     MarketplaceAuthenticatedAdminDashboardUsersRoute:
       MarketplaceAuthenticatedAdminDashboardUsersRoute,
     MarketplaceAuthenticatedAdminDashboardIndexRoute:

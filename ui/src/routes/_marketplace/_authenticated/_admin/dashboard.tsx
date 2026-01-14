@@ -4,6 +4,7 @@ import {
   Package,
   ShoppingBag,
   Users,
+  Settings,
   ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ function AdminDashboard() {
   const isInventoryActive = !!matchRoute({ to: "/dashboard/inventory" });
   const isOrdersActive = !!matchRoute({ to: "/dashboard/orders" });
   const isUsersActive = !!matchRoute({ to: "/dashboard/users" });
+  const isProvidersActive = !!matchRoute({ to: "/dashboard/providers" });
 
   return (
     <div className="bg-background min-h-screen">
@@ -46,6 +48,7 @@ function AdminDashboard() {
           <div className="space-y-1">
             <Link
               to="/dashboard"
+              preload="intent"
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
                 isOverviewActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-[#f5f5f7] dark:hover:bg-accent/50"
@@ -58,6 +61,7 @@ function AdminDashboard() {
 
             <Link
               to="/dashboard/inventory"
+              preload="intent"
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
                 isInventoryActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-[#f5f5f7] dark:hover:bg-accent/50"
@@ -70,6 +74,7 @@ function AdminDashboard() {
 
             <Link
               to="/dashboard/orders"
+              preload="intent"
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
                 isOrdersActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-[#f5f5f7] dark:hover:bg-accent/50"
@@ -82,6 +87,7 @@ function AdminDashboard() {
 
             <Link
               to="/dashboard/users"
+              preload="intent"
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
                 isUsersActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-[#f5f5f7] dark:hover:bg-accent/50"
@@ -89,6 +95,19 @@ function AdminDashboard() {
             >
               <Users className="size-4" />
               <span className="flex-1 text-sm">Users</span>
+              <ChevronRight className="size-4" />
+            </Link>
+
+            <Link
+              to="/dashboard/providers"
+              preload="intent"
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                isProvidersActive ? "bg-[#ececf0] dark:bg-accent" : "hover:bg-[#f5f5f7] dark:hover:bg-accent/50"
+              )}
+            >
+              <Settings className="size-4" />
+              <span className="flex-1 text-sm">Providers</span>
               <ChevronRight className="size-4" />
             </Link>
           </div>

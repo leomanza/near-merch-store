@@ -57,6 +57,13 @@
       "when": 1768355681515,
       "tag": "0007_freezing_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1768363788542,
+      "tag": "0008_far_sinister_six",
+      "breakpoints": true
     }
   ]
 }

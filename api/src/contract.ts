@@ -1,13 +1,17 @@
-import { oc } from 'every-plugin/orpc';
+import { oc, eventIterator } from 'every-plugin/orpc';
 import { z } from 'every-plugin/zod';
 import {
   CollectionSchema,
+  ConfigureWebhookInputSchema,
+  ConfigureWebhookOutputSchema,
   CreateCheckoutInputSchema,
   CreateCheckoutOutputSchema,
+  OrderStatusEventSchema,
   OrderStatusSchema,
   OrderWithItemsSchema,
   ProductCategorySchema,
   ProductSchema,
+  ProviderConfigSchema,
   QuoteItemInputSchema,
   QuoteOutputSchema,
   ShippingAddressSchema,
@@ -204,6 +208,17 @@ export const contract = oc.router({
     .input(z.object({ sessionId: z.string() }))
     .output(z.object({ order: OrderWithItemsSchema.nullable() })),
 
+  subscribeOrderStatus: oc
+    .route({
+      method: 'GET',
+      path: '/orders/status/subscribe/{sessionId}',
+      summary: 'Subscribe to order status updates',
+      description: 'SSE endpoint for real-time order status updates. Streams status changes until terminal state.',
+      tags: ['Orders'],
+    })
+    .input(z.object({ sessionId: z.string() }))
+    .output(eventIterator(OrderStatusEventSchema)),
+
   getAllOrders: oc
     .route({
       method: 'GET',
@@ -380,4 +395,52 @@ export const contract = oc.router({
         cachedAt: z.number(),
       })
     ),
+
+  getProviderConfig: oc
+    .route({
+      method: 'GET',
+      path: '/admin/providers/{provider}',
+      summary: 'Get provider configuration',
+      description: 'Returns the configuration for a fulfillment provider including webhook settings.',
+      tags: ['Admin', 'Providers'],
+    })
+    .input(z.object({ provider: z.literal('printful') }))
+    .output(z.object({ config: ProviderConfigSchema.nullable() })),
+
+  configureWebhook: oc
+    .route({
+      method: 'POST',
+      path: '/admin/providers/{provider}/webhook',
+      summary: 'Configure provider webhook',
+      description: 'Configures webhook URL and events for a fulfillment provider.',
+      tags: ['Admin', 'Providers'],
+    })
+    .input(ConfigureWebhookInputSchema)
+    .output(ConfigureWebhookOutputSchema),
+
+  disableWebhook: oc
+    .route({
+      method: 'DELETE',
+      path: '/admin/providers/{provider}/webhook',
+      summary: 'Disable provider webhook',
+      description: 'Disables webhook notifications for a fulfillment provider.',
+      tags: ['Admin', 'Providers'],
+    })
+    .input(z.object({ provider: z.literal('printful') }))
+    .output(z.object({ success: z.boolean() })),
+
+  testProvider: oc
+    .route({
+      method: 'POST',
+      path: '/admin/providers/{provider}/test',
+      summary: 'Test provider connection',
+      description: 'Tests the connection to a fulfillment provider.',
+      tags: ['Admin', 'Providers'],
+    })
+    .input(z.object({ provider: z.literal('printful') }))
+    .output(z.object({
+      success: z.boolean(),
+      message: z.string().optional(),
+      timestamp: z.string().datetime(),
+    })),
 });

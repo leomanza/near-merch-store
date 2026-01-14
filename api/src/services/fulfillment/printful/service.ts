@@ -9,7 +9,7 @@ import {
   type Shipment,
   type Variant
 } from 'printful-sdk-js-v2';
-import type { ProductImage } from '../../../schema';
+import type { PrintfulWebhookEventType, ProductImage } from '../../../schema';
 import { FulfillmentError } from '../errors';
 import type {
   FulfillmentOrder,
@@ -431,6 +431,149 @@ export class PrintfulService {
       } catch {
         return false;
       }
+    });
+  }
+
+  configureWebhooks(params: {
+    defaultUrl: string;
+    events: PrintfulWebhookEventType[];
+    expiresAt?: string | null;
+  }) {
+    return Effect.tryPromise({
+      try: async () => {
+        const eventConfigs = params.events.map(type => ({ type }));
+
+        const response = await fetch('https://api.printful.com/v2/webhooks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`,
+            'X-PF-Store-Id': this.storeId,
+          },
+          body: JSON.stringify({
+            default_url: params.defaultUrl,
+            expires_at: params.expiresAt || null,
+            events: eventConfigs,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({})) as { result?: string; error?: { message?: string } };
+          const errorMessage = errorData.result || errorData.error?.message || `HTTP ${response.status}`;
+          throw new Error(`Failed to configure webhooks: ${errorMessage}`);
+        }
+
+        const data = await response.json() as {
+          code: number;
+          result: {
+            default_url: string;
+            expires_at: string | null;
+            events: Array<{ type: string; url: string | null }>;
+            public_key: string;
+            secret_key: string;
+          };
+        };
+
+        return {
+          webhookUrl: data.result.default_url,
+          expiresAt: data.result.expires_at ? new Date(data.result.expires_at).getTime() : null,
+          enabledEvents: data.result.events.map(e => e.type as PrintfulWebhookEventType),
+          publicKey: data.result.public_key,
+          secretKey: data.result.secret_key,
+        };
+      },
+      catch: (e) => new Error(`Failed to configure Printful webhooks: ${e instanceof Error ? e.message : String(e)}`),
+    });
+  }
+
+  disableWebhooks() {
+    return Effect.tryPromise({
+      try: async () => {
+        const response = await fetch('https://api.printful.com/v2/webhooks', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`,
+            'X-PF-Store-Id': this.storeId,
+          },
+        });
+
+        if (!response.ok && response.status !== 204 && response.status !== 404) {
+          const errorData = await response.json().catch(() => ({})) as { result?: string; error?: { message?: string } };
+          const errorMessage = errorData.result || errorData.error?.message || `HTTP ${response.status}`;
+          throw new Error(`Failed to disable webhooks: ${errorMessage}`);
+        }
+
+        return { success: true };
+      },
+      catch: (e) => new Error(`Failed to disable Printful webhooks: ${e instanceof Error ? e.message : String(e)}`),
+    });
+  }
+
+  getWebhookConfig() {
+    return Effect.tryPromise({
+      try: async () => {
+        const response = await fetch('https://api.printful.com/v2/webhooks', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`,
+            'X-PF-Store-Id': this.storeId,
+          },
+        });
+
+        if (response.status === 404) {
+          return null;
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({})) as { result?: string; error?: { message?: string } };
+          const errorMessage = errorData.result || errorData.error?.message || `HTTP ${response.status}`;
+          throw new Error(`Failed to get webhook config: ${errorMessage}`);
+        }
+
+        const data = await response.json() as {
+          code: number;
+          result: {
+            default_url: string;
+            expires_at: string | null;
+            events: Array<{ type: string; url: string | null }>;
+            public_key: string;
+          };
+        };
+
+        return {
+          webhookUrl: data.result.default_url,
+          expiresAt: data.result.expires_at ? new Date(data.result.expires_at).getTime() : null,
+          enabledEvents: data.result.events.map(e => e.type as PrintfulWebhookEventType),
+          publicKey: data.result.public_key,
+        };
+      },
+      catch: (e) => new Error(`Failed to get Printful webhook config: ${e instanceof Error ? e.message : String(e)}`),
+    });
+  }
+
+  ping() {
+    return Effect.tryPromise({
+      try: async () => {
+        const response = await fetch('https://api.printful.com/v2/stores', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'X-PF-Store-Id': this.storeId,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Printful API returned ${response.status}`);
+        }
+
+        return {
+          success: true,
+          timestamp: new Date().toISOString(),
+        };
+      },
+      catch: (e) => new Error(`Printful connection test failed: ${e instanceof Error ? e.message : String(e)}`),
     });
   }
 

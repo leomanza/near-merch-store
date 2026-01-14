@@ -1,5 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { Attribute, FulfillmentConfig, ProductOption } from '../schema';
+import type { Attribute, FulfillmentConfig, PrintfulWebhookEventType, ProductOption } from '../schema';
 
 export const products = sqliteTable('products', {
   id: text('id').primaryKey(), // UUID v7
@@ -176,3 +176,17 @@ export interface DeliveryEstimate {
   minDeliveryDate: string;
   maxDeliveryDate: string;
 }
+
+export const providerConfigs = sqliteTable('provider_configs', {
+  provider: text('provider').primaryKey(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+  webhookUrl: text('webhook_url'),
+  webhookUrlOverride: text('webhook_url_override'),
+  enabledEvents: text('enabled_events', { mode: 'json' }).$type<PrintfulWebhookEventType[]>(),
+  publicKey: text('public_key'),
+  secretKey: text('secret_key'),
+  lastConfiguredAt: integer('last_configured_at', { mode: 'timestamp' }),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});

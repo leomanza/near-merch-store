@@ -359,3 +359,74 @@ export type QuoteItemInput = z.infer<typeof QuoteItemInputSchema>;
 export type ProviderShippingOption = z.infer<typeof ProviderShippingOptionSchema>;
 export type ProviderBreakdown = z.infer<typeof ProviderBreakdownSchema>;
 export type QuoteOutput = z.infer<typeof QuoteOutputSchema>;
+
+export const PrintfulWebhookEventTypeSchema = z.enum([
+  'shipment_sent',
+  'shipment_delivered',
+  'shipment_returned',
+  'shipment_canceled',
+  'shipment_out_of_stock',
+  'shipment_put_hold',
+  'shipment_put_hold_approval',
+  'shipment_remove_hold',
+  'order_created',
+  'order_updated',
+  'order_failed',
+  'order_canceled',
+  'order_put_hold',
+  'order_put_hold_approval',
+  'order_remove_hold',
+  'order_refunded',
+  'catalog_stock_updated',
+  'catalog_price_changed',
+  'mockup_task_finished',
+]);
+
+export const PrintfulEventConfigSchema = z.object({
+  type: PrintfulWebhookEventTypeSchema,
+  url: z.string().nullable().optional(),
+  params: z.array(z.record(z.string(), z.unknown())).optional(),
+});
+
+export const ProviderConfigSchema = z.object({
+  provider: z.literal('printful'),
+  enabled: z.boolean(),
+  webhookUrl: z.string().nullable(),
+  webhookUrlOverride: z.string().nullable(),
+  enabledEvents: z.array(PrintfulWebhookEventTypeSchema),
+  publicKey: z.string().nullable(),
+  secretKey: z.string().nullable(),
+  lastConfiguredAt: z.number().nullable(),
+  expiresAt: z.number().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ConfigureWebhookInputSchema = z.object({
+  provider: z.literal('printful'),
+  webhookUrlOverride: z.string().url().nullable().optional(),
+  events: z.array(PrintfulWebhookEventTypeSchema).min(1),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+
+export const ConfigureWebhookOutputSchema = z.object({
+  success: z.boolean(),
+  webhookUrl: z.string(),
+  publicKey: z.string().nullable(),
+  enabledEvents: z.array(PrintfulWebhookEventTypeSchema),
+  expiresAt: z.number().nullable(),
+});
+
+export type PrintfulWebhookEventType = z.infer<typeof PrintfulWebhookEventTypeSchema>;
+export type PrintfulEventConfig = z.infer<typeof PrintfulEventConfigSchema>;
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type ConfigureWebhookInput = z.infer<typeof ConfigureWebhookInputSchema>;
+export type ConfigureWebhookOutput = z.infer<typeof ConfigureWebhookOutputSchema>;
+
+export const OrderStatusEventSchema = z.object({
+  status: OrderStatusSchema,
+  trackingInfo: z.array(TrackingInfoSchema).optional(),
+  updatedAt: z.string().datetime(),
+});
+
+export type OrderStatusEvent = z.infer<typeof OrderStatusEventSchema>;
